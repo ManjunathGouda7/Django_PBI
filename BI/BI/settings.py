@@ -2,6 +2,7 @@ import os
 import re
 from pathlib import Path
 import django.utils.cache
+from dotenv import load_dotenv
 
 # Patch Django 6.1 compatibility for Django REST Framework
 if not hasattr(django.utils.cache, 'cc_delim_re'):
@@ -10,20 +11,23 @@ if not hasattr(django.utils.cache, 'cc_delim_re'):
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env file if present
+# Load environment variables from .env file
 env_file = BASE_DIR / '.env'
 if env_file.exists():
-    with open(env_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, val = line.split('=', 1)
-                os.environ.setdefault(key.strip(), val.strip())
+    load_dotenv(dotenv_path=env_file)
+else:
+    load_dotenv()
 
-# Quick-start development settings
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-x*2(#3h@!3s*9vion^*v7m&wsua8u7jh8=6spm_@n8qb17x9&#')
+# Security & Debug Settings
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-key-change-in-production-powerbi-studio'
+    else:
+        raise ValueError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable is required in production!")
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -82,12 +86,33 @@ DATABASES = {
     }
 }
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'powerbi-analytics-cache',
+# Cache Setup: Redis fallback to LocMem
+REDIS_URL = os.getenv('REDIS_URL', '')
+has_django_redis = False
+if REDIS_URL:
+    try:
+        import django_redis
+        has_django_redis = True
+    except ImportError:
+        has_django_redis = False
+
+if REDIS_URL and has_django_redis:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'powerbi-analytics-cache',
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -114,10 +139,55 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS Configuration
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:8000').split(',') if o.strip()]
+
+# Production Security Header Enhancements
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'analytics': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}

@@ -1,16 +1,20 @@
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.http import HttpResponse
 from .models import Dashboard, Dataset, UserProfile
+
+logger = logging.getLogger(__name__)
 
 @login_required(login_url='/login/')
 def index_view(request):
     """
     Main Power BI Studio single page application shell (Requires Authentication).
     """
-    profile, created = UserProfile.objects.get_or_create(user=request.user)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
     role = profile.role if profile else 'admin'
     return render(request, 'analytics/index.html', {
         'user_role': role,
@@ -19,7 +23,8 @@ def index_view(request):
 
 def login_view(request):
     """
-    Handles user login and user registration stored securely in DB.
+    Handles secure user login and registration stored in DB.
+    Validates redirect targets to prevent Open Redirect vulnerabilities.
     """
     if request.user.is_authenticated:
         return redirect('analytics:index')
@@ -46,15 +51,20 @@ def login_view(request):
                 user = User.objects.create_user(username=username, password=password, email=email)
                 UserProfile.objects.create(user=user, role=role)
                 login(request, user)
+                logger.info(f"New user registered and logged in: {username}")
                 return redirect('analytics:index')
 
         elif action == 'login':
             user = authenticate(request, username=username, password=password)
             if user is not None:
                 login(request, user)
+                logger.info(f"User authenticated successfully: {username}")
                 next_url = request.GET.get('next', '/')
+                if not url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
+                    next_url = '/'
                 return redirect(next_url)
             else:
+                logger.warning(f"Failed login attempt for username: {username}")
                 error_msg = "Invalid username or password. Please check your credentials."
 
     return render(request, 'analytics/login.html', {
@@ -66,6 +76,8 @@ def logout_view(request):
     """
     Logs out user and redirects to login portal.
     """
+    if request.user.is_authenticated:
+        logger.info(f"User logged out: {request.user.username}")
     logout(request)
     return redirect('analytics:login')
 
