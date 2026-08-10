@@ -1,5 +1,5 @@
-# Use lightweight Python 3.11 slim base image
-FROM python:3.14-slim
+# Use lightweight Python 3.12 slim base image
+FROM python:3.12-slim
 
 # Prevent Python from writing .pyc files & enable unbuffered logging
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (build-essential, libpq-dev for DB drivers)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \

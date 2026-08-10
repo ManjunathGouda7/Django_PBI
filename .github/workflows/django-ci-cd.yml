@@ -20,10 +20,10 @@ jobs:
     - name: Check out Repository
       uses: actions/checkout@v3
 
-    - name: Set up Python 3.11
+    - name: Set up Python 3.12
       uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
+        python-version: "3.12"
 
     - name: Install Dependencies
       run: |
@@ -36,9 +36,10 @@ jobs:
         python manage.py check
         python manage.py makemigrations --check --dry-run
 
-    - name: Validate Python Syntax
+    - name: Run Automated Unit Tests
       run: |
-        python -m compileall BI/
+        cd BI
+        python manage.py test analytics
 
     - name: Build Docker Image Validation
       run: |
