@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
 
     services:
       mongodb:
@@ -20,14 +23,14 @@ jobs:
     - name: Check out Repository
       uses: actions/checkout@v3
 
-    - name: Set up Python 3.12
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
-        python-version: "3.12"
+        python-version: ${{ matrix.python-version }}
 
     - name: Install Dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools
         pip install -r requirements.txt
 
     - name: Run Django System Checks & Migrations Check
