@@ -1,0 +1,9 @@
+Django>=5.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+numpy>=1.24.0
+pymongo>=4.0.0
+dnspython>=2.6.1
+python-dateutil>=2.8.2
+asgiref>=3.7.0
+sqlparse>=0.4.4

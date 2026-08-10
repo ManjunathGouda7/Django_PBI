@@ -1,0 +1,260 @@
+{% extends 'analytics/base.html' %}
+{% block title %}Sign In — Power BI Studio{% endblock %}
+
+{% block content %}
+<style>
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at top right, #1e293b 0%, #0f172a 100%);
+    padding: 1.5rem;
+}
+
+.login-card {
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 440px;
+    padding: 2.25rem;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 1.75rem;
+}
+
+.login-brand-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 0.5rem;
+}
+
+.login-subtitle {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.auth-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 1.5rem;
+}
+
+.auth-tab {
+    flex: 1;
+    text-align: center;
+    padding: 0.6rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.auth-tab.active {
+    color: #00A4EF;
+    border-bottom-color: #00A4EF;
+}
+
+.auth-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.auth-form-group label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 0.4rem;
+}
+
+.auth-input {
+    width: 100%;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    color: #f8fafc;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.auth-input:focus {
+    border-color: #00A4EF;
+    box-shadow: 0 0 0 3px rgba(0, 164, 239, 0.2);
+}
+
+.btn-auth-submit {
+    width: 100%;
+    background: linear-gradient(135deg, #00A4EF 0%, #0078d4 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    margin-top: 0.5rem;
+}
+
+.btn-auth-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 164, 239, 0.4);
+}
+
+.auth-error-msg {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
+}
+
+.auth-success-msg {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
+}
+</style>
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-brand-logo">
+                <i class="fa-solid fa-chart-column text-accent"></i>
+                <span>Power BI Studio</span>
+            </div>
+            <div class="login-subtitle">Sign in to access telemetry dashboards & report analytics</div>
+        </div>
+
+        {% if error_msg %}
+        <div class="auth-error-msg">
+            <i class="fa-solid fa-triangle-exclamation"></i> {{ error_msg }}
+        </div>
+        {% endif %}
+
+        {% if success_msg %}
+        <div class="auth-success-msg">
+            <i class="fa-solid fa-circle-check"></i> {{ success_msg }}
+        </div>
+        {% endif %}
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+            <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Create Account</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="form-login" method="POST" action="{% url 'analytics:login' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="login">
+            <div class="auth-form-group">
+                <label for="login-username"><i class="fa-solid fa-user"></i> Username</label>
+                <input type="text" id="login-username" name="username" class="auth-input" placeholder="Enter your username" required autofocus>
+            </div>
+            <div class="auth-form-group">
+                <label for="login-password"><i class="fa-solid fa-lock"></i> Password</label>
+                <input type="password" id="login-password" name="password" class="auth-input" placeholder="Enter your password" required>
+            </div>
+            <button type="submit" class="btn-auth-submit">
+                <i class="fa-solid fa-right-to-bracket"></i> Sign In
+            </button>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="form-register" method="POST" action="{% url 'analytics:login' %}" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="register">
+            <div class="auth-form-group">
+                <label for="reg-username"><i class="fa-solid fa-user-plus"></i> Choose Username</label>
+                <input type="text" id="reg-username" name="username" class="auth-input" placeholder="Create a username" required>
+            </div>
+            <div class="auth-form-group">
+                <label for="reg-email"><i class="fa-solid fa-envelope"></i> Email Address</label>
+                <input type="email" id="reg-email" name="email" class="auth-input" placeholder="name@company.com">
+            </div>
+            <div class="auth-form-group">
+                <label for="reg-password"><i class="fa-solid fa-key"></i> Set Password</label>
+                <input type="password" id="reg-password" name="password" class="auth-input" placeholder="Create a password" required minlength="4">
+            </div>
+            <div class="auth-form-group">
+                <label for="reg-confirm-password"><i class="fa-solid fa-shield-check"></i> Confirm Password</label>
+                <input type="password" id="reg-confirm-password" name="confirm_password" class="auth-input" placeholder="Re-enter password" required minlength="4">
+                <div id="pass-match-msg" style="font-size:0.75rem; margin-top:4px; display:none;"></div>
+            </div>
+            <button type="submit" class="btn-auth-submit" id="btn-reg-submit">
+                <i class="fa-solid fa-user-check"></i> Register & Set Password
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function switchAuthTab(tab) {
+    const loginTab = document.getElementById('tab-login');
+    const registerTab = document.getElementById('tab-register');
+    const loginForm = document.getElementById('form-login');
+    const registerForm = document.getElementById('form-register');
+
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+    } else {
+        registerTab.classList.add('active');
+        loginTab.classList.remove('active');
+        registerForm.style.display = 'block';
+        loginForm.style.display = 'none';
+    }
+}
+
+// Live Password Match Validation
+const regPass = document.getElementById('reg-password');
+const regConfirmPass = document.getElementById('reg-confirm-password');
+const passMatchMsg = document.getElementById('pass-match-msg');
+const regSubmitBtn = document.getElementById('btn-reg-submit');
+
+function checkPasswordMatch() {
+    if (!regPass.value || !regConfirmPass.value) {
+        passMatchMsg.style.display = 'none';
+        return;
+    }
+    passMatchMsg.style.display = 'block';
+    if (regPass.value === regConfirmPass.value) {
+        passMatchMsg.style.color = '#34d399';
+        passMatchMsg.innerHTML = '<i class="fa-solid fa-check-circle"></i> Passwords match!';
+        regSubmitBtn.disabled = false;
+    } else {
+        passMatchMsg.style.color = '#f87171';
+        passMatchMsg.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Passwords do not match';
+        regSubmitBtn.disabled = true;
+    }
+}
+
+if (regPass && regConfirmPass) {
+    regPass.addEventListener('input', checkPasswordMatch);
+    regConfirmPass.addEventListener('input', checkPasswordMatch);
+}
+</script>
+{% endblock %}

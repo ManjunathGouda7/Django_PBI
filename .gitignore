@@ -1,0 +1,34 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+mgenv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django local settings & DB
+*.sqlite3
+*.db
+.env
+media/
+staticfiles/
+
+# Large Datasets (> 100MB)
+data/*.json
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

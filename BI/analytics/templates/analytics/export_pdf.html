@@ -1,0 +1,116 @@
+{% extends "analytics/base.html" %}
+
+{% block title %}{{ dashboard.title }} - Print & Export{% endblock %}
+
+{% block content %}
+<div class="export-container">
+    <header class="export-header">
+        <div>
+            <h1><i class="fa-solid fa-chart-line text-warning"></i> {{ dashboard.title }}</h1>
+            <p>{{ dashboard.description|default:"Power BI Executive Dashboard Report" }} | Dataset: <strong>{{ dashboard.dataset.name }}</strong></p>
+        </div>
+        <button onclick="window.print()" class="btn btn-primary no-print"><i class="fa-solid fa-print"></i> Print / Save PDF</button>
+    </header>
+
+    <div id="export-grid" class="export-grid" data-dashboard-id="{{ dashboard.id }}">
+        <!-- Visual cards will render here -->
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const dbId = document.getElementById('export-grid').dataset.dashboardId;
+    fetch(`/api/dashboards/${dbId}/`)
+        .then(res => res.json())
+        .then(data => {
+            const grid = document.getElementById('export-grid');
+            grid.innerHTML = '';
+            data.widgets.forEach(w => {
+                const card = document.createElement('div');
+                card.className = 'export-card';
+                card.innerHTML = `<h3>${w.title}</h3><div style="height: 260px;"><canvas id="canvas-exp-${w.id}"></canvas></div>`;
+                grid.appendChild(card);
+                
+                setTimeout(() => {
+                    renderExportChart(`canvas-exp-${w.id}`, w);
+                }, 100);
+            });
+        });
+});
+
+function renderExportChart(canvasId, widget) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    const chartData = widget.chart_data;
+
+    if (widget.visual_type === 'kpi') {
+        ctx.parentElement.innerHTML = `
+            <div class="kpi-card-export">
+                <div class="kpi-val">${chartData.kpi_value !== undefined ? chartData.kpi_value.toLocaleString() : '0'}</div>
+                <div class="kpi-lbl">${chartData.kpi_label || 'Metric'}</div>
+            </div>`;
+        return;
+    }
+
+    if (widget.visual_type === 'table') {
+        let tableHtml = '<div class="table-responsive"><table class="export-table"><thead><tr>';
+        (chartData.table_headers || []).forEach(h => tableHtml += `<th>${h}</th>`);
+        tableHtml += '</tr></thead><tbody>';
+        (chartData.raw_table || []).slice(0, 10).forEach(row => {
+            tableHtml += '<tr>';
+            Object.values(row).forEach(v => tableHtml += `<td>${v}</td>`);
+            tableHtml += '</tr>';
+        });
+        tableHtml += '</tbody></table></div>';
+        ctx.parentElement.innerHTML = tableHtml;
+        return;
+    }
+
+    let chartType = widget.visual_type;
+    let indexAxis = 'x';
+    if (chartType === 'column') { chartType = 'bar'; indexAxis = 'x'; }
+    if (chartType === 'bar') { chartType = 'bar'; indexAxis = 'y'; }
+    if (chartType === 'area') { chartType = 'line'; }
+    if (chartType === 'donut') { chartType = 'doughnut'; }
+
+    new Chart(ctx, {
+        type: chartType,
+        data: {
+            labels: chartData.labels || [],
+            datasets: [{
+                label: widget.title,
+                data: chartData.datasets ? chartData.datasets[0].data : [],
+                backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'],
+                fill: (widget.visual_type === 'area')
+            }]
+        },
+        options: {
+            indexAxis: indexAxis,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true } }
+        }
+    });
+}
+</script>
+
+<style>
+.export-container { padding: 2rem; background: #0f172a; color: #f8fafc; min-height: 100vh; }
+.export-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+.export-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+.export-card { background: #1e293b; border-radius: 8px; padding: 1rem; border: 1px solid #334155; }
+.kpi-card-export { text-align: center; padding: 2rem 0; }
+.kpi-val { font-size: 3rem; font-weight: 800; color: #38bdf8; }
+.kpi-lbl { font-size: 1rem; color: #94a3b8; margin-top: 0.5rem; }
+.export-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.export-table th, .export-table td { padding: 8px 12px; border: 1px solid #334155; text-align: left; }
+.export-table th { background: #0f172a; }
+@media print {
+    .no-print { display: none; }
+    .export-container { background: #ffffff; color: #000000; }
+    .export-card { background: #ffffff; border: 1px solid #ccc; page-break-inside: avoid; }
+    .kpi-val { color: #1e3a8a; }
+    .export-table th { background: #f1f5f9; color: #000; }
+}
+</style>
+{% endblock %}

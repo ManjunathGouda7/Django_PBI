@@ -1,0 +1,427 @@
+{% extends "analytics/base.html" %}
+
+{% block title %}Power BI Studio - Django Analytics{% endblock %}
+
+{% block content %}
+<div class="pbi-app-container">
+
+    <!-- Top Application Bar -->
+    <header class="pbi-navbar">
+        <div class="navbar-brand">
+            <div class="pbi-logo">
+                <i class="fa-solid fa-chart-column"></i>
+            </div>
+            <div class="brand-text">
+                <span class="app-title">Power BI Studio</span>
+                <span class="app-subtitle">Django Analytics Platform</span>
+            </div>
+        </div>
+
+        <!-- Dashboard Selector & Actions -->
+        <div class="navbar-center">
+            <div class="select-group">
+                <label><i class="fa-solid fa-dashboard"></i> Dashboard:</label>
+                <select id="dashboard-select" class="pbi-select">
+                    <option value="">Loading Dashboards...</option>
+                </select>
+                <button class="btn btn-sm btn-icon" id="btn-new-dashboard" title="Create New Dashboard">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+
+            <div class="select-group">
+                <label><i class="fa-solid fa-database"></i> Dataset:</label>
+                <select id="dataset-select" class="pbi-select">
+                    <option value="">Loading Datasets...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="navbar-actions">
+            <button class="btn btn-warning" id="btn-get-data">
+                <i class="fa-solid fa-file-import"></i> Get Data
+            </button>
+            <div class="theme-picker">
+                <label><i class="fa-solid fa-palette"></i></label>
+                <select id="theme-select" class="pbi-select select-sm">
+                    <option value="dark_modern">Obsidian Dark</option>
+                    <option value="powerbi_classic">Power BI Classic Light</option>
+                    <option value="powerbi_yellow">Power BI Gold Dark</option>
+                    <option value="cyberpunk">Cyberpunk Neon</option>
+                    <option value="emerald">Emerald Teal</option>
+                    <option value="clean_light">Slate Light</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary" id="btn-export-pdf">
+                <i class="fa-solid fa-file-export"></i> Export PDF
+            </button>
+            <div class="user-auth-badge"
+                style="display:flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.1);">
+                <i class="fa-solid fa-user-shield text-success"></i>
+                <span style="font-weight:600; color: #f8fafc;">{{ request.user.username }}</span>
+                <span class="badge badge-primary"
+                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{
+                    user_role_display }}</span>
+                <a href="{% url 'analytics:logout' %}" class="btn btn-xs btn-outline"
+                    style="padding: 2px 8px; font-size: 0.72rem; color: #f87171; border-color: rgba(248,113,113,0.4);"
+                    title="Sign Out">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Power BI Desktop Ribbon Menu -->
+    <div class="pbi-ribbon-bar">
+        <div class="ribbon-tab active"><i class="fa-solid fa-house text-accent"></i> Home</div>
+        <div class="ribbon-tab" id="ribbon-btn-getdata"><i class="fa-solid fa-table text-primary"></i> Get Data</div>
+        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh Data
+        </div>
+        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers & Filters
+        </div>
+        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-success"></i> Export CSV</div>
+        <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> Export PDF</div>
+        <div class="ribbon-tab-auto-refresh"
+            style="display:flex; align-items:center; gap:0.4rem; margin-left:auto; font-size:0.78rem; color:var(--text-muted);">
+            <i class="fa-solid fa-clock text-warning"></i> Live Auto-Refresh:
+            <select id="auto-refresh-select" class="pbi-select select-sm" style="padding:2px 6px; font-size:0.75rem;">
+                <option value="0">Off (Manual)</option>
+                <option value="5">Every 5s</option>
+                <option value="10">Every 10s</option>
+                <option value="30">Every 30s</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Main Workspace (3-Pane Layout) -->
+    <main class="pbi-workspace">
+
+        <!-- Far Left Icon Navigation Bar -->
+        <nav class="pbi-icon-sidebar">
+            <button class="icon-nav-item active" id="nav-report-view" title="Report Canvas View">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Report</span>
+            </button>
+            <button class="icon-nav-item" id="nav-data-view" title="Data Tabular View">
+                <i class="fa-solid fa-table"></i>
+                <span>Data</span>
+            </button>
+            <button class="icon-nav-item" id="nav-model-view" title="Dataset Models">
+                <i class="fa-solid fa-diagram-project"></i>
+                <span>Model</span>
+            </button>
+        </nav>
+
+        <!-- View Mode 1: REPORT CANVAS VIEW -->
+        <div id="view-report" class="pbi-view-container active">
+
+
+            <!-- Hidden stubs (keep JS references valid after Fields pane removal) -->
+            <span id="field-count-badge" style="display:none;"></span>
+            <input type="text" id="field-search-input" style="display:none;">
+            <div id="fields-tree-container" style="display:none;"></div>
+
+            <!-- Center Report Canvas Grid -->
+            <section class="pbi-canvas-area">
+
+                <!-- Dynamic Slicers Filter Bar -->
+                <div class="slicers-bar" id="slicers-bar">
+                    <div class="slicers-label">
+                        <i class="fa-solid fa-filter text-accent"></i> Active Slicers:
+                    </div>
+                    <div class="slicer-pills" id="slicer-pills-container">
+                        <span class="no-slicers-text">No active filters (click chart elements to cross-filter)</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline btn-icon" id="btn-clear-slicers" title="Clear All Slicers">
+                        <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+                    </button>
+                </div>
+
+
+
+                <!-- Interactive Visual Canvas -->
+                <div class="pbi-canvas-grid" id="canvas-grid">
+                    <!-- Dynamic Visual Cards will be rendered here -->
+                </div>
+            </section>
+
+            <!-- Right Visualizations & Field Mapping Pane -->
+            <aside class="pbi-viz-pane">
+                <!-- Right Pane Tab Toggle -->
+                <div class="right-pane-tabs">
+                    <button class="right-pane-tab active" id="tab-viz-pane" title="Visualizations">
+                        <i class="fa-solid fa-sliders"></i> Visualizations
+                    </button>
+                    <button class="right-pane-tab" id="tab-filter-pane" title="Filters on this page">
+                        <i class="fa-solid fa-filter"></i> Filters
+                    </button>
+                </div>
+
+                <!-- Panel: Visualizations -->
+                <div id="panel-viz" class="right-pane-panel active">
+                    <div class="viz-panel-mode-bar"
+                        style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                        <span id="viz-mode-status" style="font-size:0.75rem; font-weight:600; color:var(--text-muted);">
+                            <i class="fa-solid fa-plus text-primary"></i> Mode: New Visual
+                        </span>
+                        <button class="btn btn-xs btn-outline" id="btn-reset-viz-form"
+                            style="display:none; padding: 2px 8px; font-size: 0.72rem;">
+                            <i class="fa-solid fa-plus"></i> + New Visual
+                        </button>
+                    </div>
+
+                    <!-- Visual Type Picker — Scatter Plot default -->
+                    <div class="viz-type-grid viz-type-grid-1col" id="viz-type-picker">
+                        <div class="viz-type-btn active" data-type="scatter" title="Scatter Plot">
+                            <i class="fa-solid fa-circle-dot text-primary"></i>
+                            <span class="viz-type-label">Scatter Plot</span>
+                        </div>
+                    </div>
+
+                    <!-- Field Mapping Inputs -->
+                    <div class="viz-field-buckets">
+                        <div class="bucket-item">
+                            <label>Visual Title</label>
+                            <input type="text" id="viz-title-input" class="pbi-input"
+                                placeholder="e.g. PFO vs Rectified Power">
+                        </div>
+
+                        <div class="bucket-item" id="bucket-x-axis">
+                            <label><i class="fa-solid fa-arrow-right-arrow-left text-primary"></i> X-Axis / Category
+                                Field</label>
+                            <select id="viz-x-select" class="pbi-select">
+                                <option value="">Select X-Axis Field</option>
+                            </select>
+                        </div>
+
+                        <div class="bucket-item">
+                            <label><i class="fa-solid fa-arrow-up text-success"></i> Y-Axis / Value Field</label>
+                            <select id="viz-y-select" class="pbi-select">
+                                <option value="">Select Y-Axis Field</option>
+                            </select>
+                        </div>
+
+                        <div class="bucket-item" id="bucket-group-by">
+                            <label><i class="fa-solid fa-layer-group text-info"></i> Legend / Group By (Color
+                                Series)</label>
+                            <select id="viz-group-select" class="pbi-select">
+                                <option value="">None (Single Series)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div class="viz-actions">
+                        <button class="btn btn-primary btn-block" id="btn-save-widget">
+                            <i class="fa-solid fa-chart-line"></i> <span id="lbl-save-widget">Add Visual to
+                                Canvas</span>
+                        </button>
+                        <button class="btn btn-danger btn-block" id="btn-delete-widget"
+                            style="display:none; margin-top: 8px;">
+                            <i class="fa-solid fa-trash"></i> Delete Selected Visual
+                        </button>
+                    </div>
+                </div><!-- End Panel: Visualizations -->
+
+                <!-- Panel: Filters on this page -->
+                <div id="panel-filters" class="right-pane-panel">
+                    <div class="filter-pane-header">
+                        <span class="filter-pane-title">
+                            <i class="fa-solid fa-filter text-accent"></i> Filters on this page
+                        </span>
+                        <button class="filter-clear-all-btn" id="btn-clear-all-filters" title="Clear all filters">
+                            <i class="fa-solid fa-filter-circle-xmark"></i>
+                        </button>
+                    </div>
+                    <div class="filter-cards-container" id="filter-cards-container">
+                        <div class="empty-state">Select a dataset to see filters</div>
+                    </div>
+                </div><!-- End Panel: Filters -->
+
+            </aside>
+        </div>
+
+        <!-- View Mode 2: DATA TABULAR VIEW -->
+        <div id="view-data" class="pbi-view-container">
+            <div class="data-view-header">
+                <div class="data-summary">
+                    <h2><i class="fa-solid fa-table text-primary"></i> <span id="dv-dataset-title">Dataset View</span>
+                    </h2>
+                    <span class="badge badge-lg" id="dv-row-badge">0 Rows</span>
+                </div>
+                <div class="data-controls">
+                    <div class="pane-search search-lg">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text" id="dv-search-input" placeholder="Search dataset rows...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabular Grid -->
+            <div class="data-table-wrapper">
+                <table class="pbi-grid-table" id="dv-table">
+                    <thead id="dv-table-head">
+                        <tr>
+                            <th>No Data</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dv-table-body">
+                        <tr>
+                            <td>Select a dataset to preview data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Pagination Footer -->
+            <div class="data-view-footer">
+                <span id="dv-page-info">Page 1 of 1</span>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline" id="dv-prev-page"><i class="fa-solid fa-chevron-left"></i>
+                        Previous</button>
+                    <button class="btn btn-sm btn-outline" id="dv-next-page">Next <i
+                            class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Modal 1: GET DATA / UPLOAD DATASET -->
+<div class="pbi-modal-backdrop" id="modal-get-data">
+    <div class="pbi-modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-file-import text-warning"></i> Get Data - Ingest Dataset</h3>
+            <button class="modal-close" id="close-modal-data">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);">Select a data source: Upload a
+                spreadsheet, connect to a <strong>MongoDB Server</strong>, or pick a sample dataset.</p>
+
+            <!-- Data Source Tabs -->
+            <div class="modal-tabs">
+                <button class="modal-tab-btn active" id="tab-btn-file"><i class="fa-solid fa-file-csv"></i> CSV / Excel
+                    File</button>
+                <button class="modal-tab-btn" id="tab-btn-mongo"><i class="fa-solid fa-database text-success"></i>
+                    MongoDB Server</button>
+            </div>
+
+            <!-- Tab 1: File Upload Form -->
+            <form id="upload-dataset-form" class="upload-form modal-tab-content active">
+                <div class="form-group">
+                    <label>Dataset Display Name</label>
+                    <input type="text" id="upload-name-input" class="pbi-input" placeholder="e.g. Q3 Sales & Revenue"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label>Select File (CSV / XLSX)</label>
+                    <input type="file" id="upload-file-input" class="pbi-input-file" accept=".csv, .xlsx, .xls"
+                        required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Import Dataset
+                </button>
+            </form>
+
+            <!-- Tab 2: MongoDB Connection Form -->
+            <form id="mongo-dataset-form" class="upload-form modal-tab-content" style="display:none;">
+                <div class="form-group">
+                    <label>Dataset Display Name</label>
+                    <input type="text" id="mongo-name-input" class="pbi-input"
+                        placeholder="e.g. GRL - 25MPLA (192.168.100.123)" value="GRL - 25MPLA (192.168.100.123)"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-server text-accent"></i> MongoDB Connection URI</label>
+                    <input type="text" id="mongo-url-input" class="pbi-input"
+                        placeholder="mongodb://192.168.100.123:27017" value="mongodb://192.168.100.123:27017" required>
+                </div>
+                <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-database text-warning"></i> Database Name</label>
+                        <input type="text" id="mongo-dbname-input" class="pbi-input" placeholder="e.g. GRL" value="GRL"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-folder text-primary"></i> Select or Enter Collection Name</label>
+                        <input type="text" id="mongo-coll-input" class="pbi-input" list="mongo-collections-list"
+                            placeholder="e.g. 25MPLA" value="25MPLA" required>
+                        <datalist id="mongo-collections-list">
+                            <option value="25MPLA">
+                            <option value="ChecksHeader">
+                            <option value="AllChecks">
+                            <option value="BPP_PFO">
+                            <option value="EPP_PFO">
+                            <option value="BPP_EPP">
+                        </datalist>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" style="margin-top: 0.5rem;">
+                    <i class="fa-solid fa-plug"></i> Connect & Project Collection in UI
+                </button>
+
+                <!-- Push Local data/GRL.25MPLA.json Tool -->
+                <div
+                    style="background: var(--bg-pane); border: 1px dashed var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; margin-top: 0.75rem;">
+                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;">
+                        <i class="fa-solid fa-cloud-arrow-up text-info"></i> Data File Seeder (`data/GRL.25MPLA.json`):
+                    </div>
+                    <p style="font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.5rem;">If creating a new
+                        collection or populating data, push `data/GRL.25MPLA.json` to server `192.168.100.123`.</p>
+                    <button type="button" id="btn-push-mongo-json" class="btn btn-sm btn-outline btn-block">
+                        <i class="fa-solid fa-upload"></i> Push data/GRL.25MPLA.json to MongoDB
+                    </button>
+                </div>
+            </form>
+
+            <div class="divider">OR</div>
+
+            <div class="sample-data-section">
+                <h4>Choose Built-in Sample Datasets</h4>
+                <div class="sample-cards" id="sample-datasets-container">
+                    <!-- Sample items injected dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: NEW DASHBOARD -->
+<div class="pbi-modal-backdrop" id="modal-new-dashboard">
+    <div class="pbi-modal modal-sm">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-plus-circle text-primary"></i> Create Dashboard</h3>
+            <button class="modal-close" id="close-modal-dashboard">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="create-dashboard-form">
+                <div class="form-group">
+                    <label>Dashboard Title</label>
+                    <input type="text" id="new-db-title" class="pbi-input" placeholder="e.g. Regional Financial Studio"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label>Target Dataset</label>
+                    <select id="new-db-dataset-select" class="pbi-select" required>
+                        <option value="">Select Dataset</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Color Theme</label>
+                    <select id="new-db-theme" class="pbi-select">
+                        <option value="dark_modern">Obsidian Dark</option>
+                        <option value="powerbi_yellow">Power BI Classic</option>
+                        <option value="cyberpunk">Cyberpunk Neon</option>
+                        <option value="emerald">Emerald Teal</option>
+                        <option value="clean_light">Slate Light</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" style="margin-top: 1rem;">
+                    <i class="fa-solid fa-check"></i> Create Dashboard
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

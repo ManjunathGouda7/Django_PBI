@@ -1,0 +1,1171 @@
+/* Power BI Studio CSS Design System */
+:root {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #334155;
+    --bg-sidebar: #090d16;
+    --bg-pane: #111827;
+    --bg-input: #1e293b;
+    --border-color: #334155;
+    --border-highlight: #38bdf8;
+    
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+
+    --accent-yellow: #f59e0b;
+    --accent-blue: #38bdf8;
+    --accent-green: #10b981;
+    --accent-purple: #a855f7;
+    --accent-pink: #ec4899;
+    --accent-teal: #14b8a6;
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+/* Theme Variances */
+html[data-theme="powerbi_classic"] {
+    --bg-main: #f3f2f1;
+    --bg-card: #ffffff;
+    --bg-card-hover: #faf9f8;
+    --bg-sidebar: #eae8e6;
+    --bg-pane: #ffffff;
+    --bg-input: #ffffff;
+    --border-color: #e1dfdd;
+    --border-highlight: #f2c811;
+    --text-main: #252423;
+    --text-muted: #605e5c;
+    --text-dim: #a19f9d;
+    --accent-blue: #0078d4;
+    --accent-yellow: #f2c811;
+    --shadow-card: 0 1.6px 3.6px 0 rgba(0,0,0,0.132), 0 0.3px 0.9px 0 rgba(0,0,0,0.108);
+}
+
+html[data-theme="powerbi_yellow"] {
+    --bg-main: #131924;
+    --bg-card: #1c2536;
+    --bg-sidebar: #0b0f19;
+    --border-highlight: #f59e0b;
+}
+
+html[data-theme="cyberpunk"] {
+    --bg-main: #0a0518;
+    --bg-card: #150d2a;
+    --bg-sidebar: #06020e;
+    --border-highlight: #a855f7;
+}
+
+html[data-theme="emerald"] {
+    --bg-main: #064e3b;
+    --bg-card: #065f46;
+    --bg-sidebar: #022c22;
+    --border-highlight: #34d399;
+}
+
+html[data-theme="clean_light"] {
+    --bg-main: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fafc;
+    --bg-sidebar: #e2e8f0;
+    --bg-pane: #ffffff;
+    --bg-input: #f8fafc;
+    --border-color: #cbd5e1;
+    --border-highlight: #0284c7;
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --text-dim: #94a3b8;
+}
+
+/* Power BI Ribbon Bar */
+.pbi-ribbon-bar {
+    height: 36px;
+    background-color: var(--bg-pane);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    gap: 1.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.ribbon-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ribbon-tab:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-main);
+}
+
+.ribbon-tab.active {
+    color: var(--text-main);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-highlight);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body.pbi-body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.pbi-app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Navbar */
+.pbi-navbar {
+    height: 56px;
+    background-color: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.25rem;
+    z-index: 10;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pbi-logo {
+    width: 34px;
+    height: 34px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.1rem;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.app-title { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.app-subtitle { font-size: 0.72rem; color: var(--text-muted); }
+
+.navbar-center {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.select-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Workspace 3-Pane Layout */
+.pbi-workspace {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 56px);
+    overflow: hidden;
+}
+
+/* Icon Sidebar */
+.pbi-icon-sidebar {
+    width: 60px;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 1rem;
+    gap: 0.75rem;
+}
+
+.icon-nav-item {
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    gap: 2px;
+    transition: all 0.2s ease;
+}
+
+.icon-nav-item span { font-size: 0.65rem; }
+
+.icon-nav-item:hover, .icon-nav-item.active {
+    background-color: var(--bg-card);
+    color: var(--border-highlight);
+}
+
+/* View Containers */
+.pbi-view-container {
+    display: none;
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+}
+
+.pbi-view-container.active {
+    display: flex;
+}
+
+/* Report Canvas View */
+#view-report {
+    display: none;
+    flex: 1;
+    height: 100%;
+}
+#view-report.active {
+    display: flex;
+}
+
+/* Fields Pane (Left) */
+.pbi-fields-pane {
+    width: 240px;
+    background-color: var(--bg-pane);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.pane-header {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pane-header h3 { font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+.pane-search {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.pane-search i {
+    position: absolute;
+    left: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+.pane-search input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.5rem 0.35rem 2rem;
+    color: var(--text-main);
+    font-size: 0.82rem;
+}
+
+.fields-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.field-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.field-item:hover {
+    background-color: var(--bg-card-hover);
+}
+
+.field-icon-numeric { color: var(--accent-blue); font-weight: bold; font-family: var(--font-mono); }
+.field-icon-categorical { color: var(--accent-purple); font-weight: bold; font-family: var(--font-mono); }
+.field-icon-date { color: var(--accent-green); }
+
+/* Center Canvas */
+.pbi-canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-main);
+    overflow: hidden;
+}
+
+.slicers-bar {
+    height: 44px;
+    background: var(--bg-pane);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    gap: 1rem;
+}
+
+.slicers-label { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+
+.slicer-pills { display: flex; align-items: center; gap: 0.5rem; flex: 1; overflow-x: auto; }
+
+.slicer-pill {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: var(--accent-blue);
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.slicer-pill i { cursor: pointer; }
+.no-slicers-text { font-size: 0.8rem; color: var(--text-dim); font-style: italic; }
+
+.pbi-canvas-grid {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: 90px;
+    gap: 1rem;
+}
+
+/* Visual Card */
+.visual-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.2s ease;
+}
+
+.visual-card:hover {
+    border-color: var(--border-highlight);
+}
+
+.visual-card.selected {
+    border: 2px solid var(--border-highlight);
+}
+
+.visual-card-header {
+    padding: 0.6rem 0.85rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: move;
+}
+
+.visual-card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visual-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.card-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+/* Telemetry Quick Metrics Bar */
+.metrics-summary-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.metric-card-tile {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.metric-card-tile:hover {
+    border-color: var(--border-highlight);
+    transform: translateY(-1px);
+}
+
+.metric-tile-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.metric-tile-val {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+}
+
+.card-action-btn:hover { background: var(--bg-card-hover); color: var(--text-main); }
+
+.visual-card-body {
+    flex: 1;
+    padding: 0.75rem;
+    position: relative;
+    min-height: 0;
+}
+
+/* KPI Visual Styling */
+.kpi-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+}
+
+.kpi-big-number {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent-blue);
+    letter-spacing: -0.02em;
+}
+
+.kpi-metric-name {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Right Visualizations Pane */
+.pbi-viz-pane {
+    width: 280px;
+    background-color: var(--bg-pane);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+}
+
+.viz-type-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.4rem;
+    background: var(--bg-sidebar);
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.viz-type-btn {
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.viz-type-btn:hover, .viz-type-btn.active {
+    background-color: var(--bg-card-hover);
+    color: var(--border-highlight);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.viz-field-buckets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.bucket-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.bucket-item label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Inputs & Buttons */
+.pbi-input, .pbi-select {
+    width: 100%;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.6rem;
+    color: var(--text-main);
+    font-size: 0.82rem;
+    outline: none;
+}
+
+.pbi-select.select-sm { padding: 0.25rem 0.4rem; font-size: 0.78rem; }
+
+.pbi-input:focus, .pbi-select:focus {
+    border-color: var(--border-highlight);
+}
+
+.btn {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all 0.15s ease;
+}
+
+.btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+.btn-primary:hover { opacity: 0.9; }
+
+.btn-success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+.btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+.btn-secondary { background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); }
+.btn-outline:hover { background: var(--bg-card-hover); color: var(--text-main); }
+.btn-block { width: 100%; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.78rem; }
+.btn-icon { width: 28px; height: 28px; padding: 0; }
+
+.badge {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+}
+.badge-lg { padding: 4px 10px; font-size: 0.8rem; font-weight: 600; }
+
+/* Data View Tab */
+#view-data {
+    flex-direction: column;
+    background: var(--bg-main);
+    padding: 1.25rem;
+    gap: 1rem;
+}
+
+.data-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.data-summary { display: flex; align-items: center; gap: 0.75rem; }
+.data-summary h2 { font-size: 1.2rem; font-weight: 700; }
+
+.data-table-wrapper {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.pbi-grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    text-align: left;
+}
+
+.pbi-grid-table th, .pbi-grid-table td {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.pbi-grid-table th {
+    background: var(--bg-sidebar);
+    color: var(--text-muted);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.pbi-grid-table th:hover { color: var(--border-highlight); }
+
+.pbi-grid-table tr:hover td { background-color: var(--bg-card-hover); }
+
+.data-view-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* Modals */
+.pbi-modal-backdrop {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+}
+
+.pbi-modal-backdrop.active { display: flex; }
+
+.pbi-modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    width: 540px;
+    max-width: 90vw;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.pbi-modal.modal-sm { width: 420px; }
+
+.modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.modal-body { padding: 1.25rem; }
+
+.modal-tabs {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.modal-tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.15s ease;
+}
+
+.modal-tab-btn:hover, .modal-tab-btn.active {
+    background-color: var(--bg-card-hover);
+    color: var(--border-highlight);
+}
+
+.upload-form { display: flex; flex-direction: column; gap: 0.85rem; margin-top: 0.5rem; }
+
+.form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.form-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+
+.pbi-input-file {
+    background: var(--bg-input);
+    border: 1px dashed var(--border-color);
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-size: 0.82rem;
+}
+
+.divider {
+    text-align: center;
+    margin: 1.25rem 0;
+    position: relative;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.sample-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.sample-card-item {
+    background: var(--bg-pane);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sample-card-item:hover {
+    border-color: var(--border-highlight);
+    background: var(--bg-card-hover);
+}
+
+.sample-card-item h5 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.2rem; }
+.sample-card-item p { font-size: 0.72rem; color: var(--text-muted); }
+
+.empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+}
+
+/* =====================================================
+   RIGHT PANE TABS (Visualizations / Filters toggle)
+   ===================================================== */
+.right-pane-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-sidebar);
+    flex-shrink: 0;
+}
+
+.right-pane-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.6rem 0.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.right-pane-tab:hover {
+    color: var(--text-main);
+    background: var(--bg-card-hover);
+}
+
+.right-pane-tab.active {
+    color: var(--border-highlight);
+    border-bottom-color: var(--border-highlight);
+    background: transparent;
+}
+
+/* =====================================================
+   RIGHT PANE PANELS
+   ===================================================== */
+.right-pane-panel {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.85rem;
+    gap: 0.85rem;
+}
+
+.right-pane-panel.active {
+    display: flex;
+}
+
+/* =====================================================
+   2-COLUMN VIZ TYPE PICKER
+   ===================================================== */
+.viz-type-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    background: var(--bg-sidebar);
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+/* 1-COLUMN VIZ TYPE PICKER (Scatter only) */
+.viz-type-grid-1col {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+    background: var(--bg-sidebar);
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.viz-type-grid-1col .viz-type-btn {
+    height: auto;
+    flex-direction: row;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    font-size: 1.3rem;
+    border-radius: var(--radius-sm);
+    justify-content: flex-start;
+}
+
+.viz-type-grid-1col .viz-type-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: none;
+}
+
+.viz-type-grid-2col .viz-type-btn {
+    height: auto;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.85rem 0.5rem;
+    font-size: 1.4rem;
+    border-radius: var(--radius-sm);
+}
+
+.viz-type-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.viz-type-btn.active .viz-type-label {
+    color: var(--border-highlight);
+}
+
+/* =====================================================
+   FILTER PANE — Power BI "Filters on this page"
+   ===================================================== */
+.filter-pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-sidebar);
+    flex-shrink: 0;
+}
+
+.filter-pane-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.filter-clear-all-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+.filter-clear-all-btn:hover {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.filter-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* ---- Individual Filter Card ---- */
+.filter-card {
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+    transition: background 0.15s ease;
+}
+
+.filter-card.filter-active {
+    background: rgba(245, 158, 11, 0.05);
+    border-left: 3px solid #f59e0b;
+}
+
+.filter-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-card-header:hover {
+    background: var(--bg-card-hover);
+}
+
+.filter-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-col-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.filter-col-summary {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.filter-card.filter-active .filter-col-summary {
+    color: #f59e0b;
+}
+
+.filter-card-btns {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.filter-chevron,
+.filter-eraser-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-eraser-btn:hover {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.filter-chevron:hover {
+    color: var(--text-main);
+    background: var(--bg-card-hover);
+}
+
+.filter-chevron i {
+    transition: transform 0.2s ease;
+}
+
+.filter-card.expanded .filter-chevron i {
+    transform: rotate(180deg);
+}
+
+/* ---- Filter Card Body (Checkbox Options) ---- */
+.filter-card-body {
+    display: none;
+    flex-direction: column;
+    padding: 0.5rem 0.75rem 0.75rem 0.75rem;
+    gap: 0.2rem;
+    max-height: 240px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-pane);
+}
+
+.filter-card.expanded .filter-card-body {
+    display: flex;
+}
+
+.filter-card-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.filter-mode-select {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.5rem;
+    color: var(--text-main);
+    font-size: 0.75rem;
+    outline: none;
+}
+
+.filter-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.filter-search-box .search-icon {
+    position: absolute;
+    left: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.filter-search-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.5rem 0.3rem 1.7rem;
+    color: var(--text-main);
+    font-size: 0.75rem;
+    outline: none;
+}
+.filter-search-input:focus, .filter-mode-select:focus {
+    border-color: var(--border-highlight);
+}
+
+.filter-option-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.2rem;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    color: var(--text-main);
+    transition: background 0.1s ease;
+}
+
+.filter-option-item.select-all-option {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 0.2rem;
+    padding-bottom: 0.35rem;
+}
+
+.filter-option-item:hover {
+    background: var(--bg-card-hover);
+}
+
+.filter-option-item input[type="checkbox"] {
+    accent-color: #f59e0b;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.filter-option-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.filter-option-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-weight: 500;
+    font-family: var(--font-mono);
+}
+
+.filter-loading {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    padding: 0.5rem 0;
+    text-align: center;
+}
