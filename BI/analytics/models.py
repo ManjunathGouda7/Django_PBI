@@ -175,7 +175,7 @@ class Dashboard(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='dashboards', db_index=True)
-    theme = models.CharField(max_length=50, choices=THEME_CHOICES, default='powerbi_classic')
+    theme = models.CharField(max_length=50, choices=THEME_CHOICES, default='dark_modern')
     layout_type = models.CharField(max_length=20, choices=LAYOUT_CHOICES, default='grid')
     layout_config = models.JSONField(default=dict, blank=True)
     

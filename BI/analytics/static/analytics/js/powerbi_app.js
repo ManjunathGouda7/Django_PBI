@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeDataset: null,
         selectedWidgetId: null,
         activeVisualType: 'scatter',
-        userThemeSelected: 'powerbi_classic',
+        userThemeSelected: null,
         activeSlicers: {}, // e.g. { "Region": ["North America"] }
         chartInstances: {}, // Store Chart.js objects by widget id
         dataView: {
