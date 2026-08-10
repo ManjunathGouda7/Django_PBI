@@ -148,7 +148,7 @@ def ensure_sample_data():
             title="GRL 25MPLA Power Wise Studio",
             description="FPO vs Prect Power Wise Analysis, Board Telemetry, & Power Modes",
             dataset=ds,
-            theme="dark_modern"
+            theme="powerbi_classic"
         )
 
         Widget.objects.create(

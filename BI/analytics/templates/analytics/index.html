@@ -44,12 +44,7 @@
             <div class="theme-picker">
                 <label><i class="fa-solid fa-palette"></i></label>
                 <select id="theme-select" class="pbi-select select-sm">
-                    <option value="dark_modern">Obsidian Dark</option>
-                    <option value="powerbi_classic">Power BI Classic Light</option>
-                    <option value="powerbi_yellow">Power BI Gold Dark</option>
-                    <option value="cyberpunk">Cyberpunk Neon</option>
-                    <option value="emerald">Emerald Teal</option>
-                    <option value="clean_light">Slate Light</option>
+                    <option value="powerbi_classic" selected>Power BI Classic Light</option>
                 </select>
             </div>
             <button class="btn btn-secondary" id="btn-export-pdf">
@@ -60,7 +55,8 @@
                 <i class="fa-solid fa-user-shield text-success"></i>
                 <span style="font-weight:600; color: #f8fafc;">{{ request.user.username }}</span>
                 <span class="badge badge-primary"
-                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{ user_role_display|default:"Admin" }}</span>
+                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{
+                    user_role_display|default:"Admin" }}</span>
                 <a href="{% url 'analytics:logout' %}" class="btn btn-xs btn-outline"
                     style="padding: 2px 8px; font-size: 0.72rem; color: #f87171; border-color: rgba(248,113,113,0.4);"
                     title="Sign Out">
@@ -80,10 +76,14 @@
         </div>
         <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-success"></i> Export CSV</div>
         <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> Export PDF</div>
-        <div class="ribbon-qa-box" style="display:flex; align-items:center; gap:0.4rem; margin-left:1.5rem; flex:1; max-width:320px;">
+        <div class="ribbon-qa-box"
+            style="display:flex; align-items:center; gap:0.4rem; margin-left:1.5rem; flex:1; max-width:320px;">
             <div style="position:relative; width:100%;">
-                <i class="fa-solid fa-wand-magic-sparkles text-accent" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:0.75rem;"></i>
-                <input type="text" id="input-ai-qa" class="auth-input" placeholder="Ask Telemetry AI (e.g. 'Show iPhone1')" style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3);">
+                <i class="fa-solid fa-wand-magic-sparkles text-accent"
+                    style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:0.75rem;"></i>
+                <input type="text" id="input-ai-qa" class="auth-input"
+                    placeholder="Ask Telemetry AI (e.g. 'Show iPhone1')"
+                    style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3);">
             </div>
         </div>
         <div class="ribbon-tab-auto-refresh"
