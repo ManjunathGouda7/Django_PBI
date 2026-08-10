@@ -1,0 +1,81 @@
+================================================================================
+          PROJECT GIT REPOSITORY CONFIGURATION & DEPLOYMENT SUMMARY
+================================================================================
+
+1. REPOSITORY INFORMATION
+--------------------------------------------------------------------------------
+Repository URL : https://github.com/ManjunathGouda7/Django_PBI.git
+Target Branch  : main
+Project Root   : d:\Manju\PowerBI_Django
+Commit Hash    : 618a4b3c3b7fa6821b2df9b95313d724a9fd1f99
+Commit Author  : Manjunath Gouda (ManjunathGouda7)
+
+
+2. SUMMARY OF IMPLEMENTED FEATURES PUSHED TO GIT
+--------------------------------------------------------------------------------
+[x] User Authentication & Security:
+    - Route protection with @login_required (/login/, /logout/)
+    - Live password match check on sign up & server-side validation
+    - PBKDF2 + SHA256 password hashing in SQLite/PostgreSQL database
+    - Role-Based Access Control (RBAC) supporting Admin, Analyst, and Viewer roles
+
+[x] High-Performance Scatter Telemetry Engine:
+    - Vectorized C-level NumPy np.round() serialization (~15ms for 37,500+ points)
+    - Scatter Plot set as default visual card type
+    - Drag-to-zoom, scroll wheel zoom, and double-click zoom reset
+    - Point click cross-filtering across all canvas visual cards
+
+[x] MongoDB Ingestion & Offline Fallback:
+    - PyMongo 500ms connector to mongodb://192.168.100.123:27017 (GRL.25MPLA)
+    - Offline fallback to data/GRL.25MPLA.json (280,275 telemetry records)
+    - In-memory DataFrame cache (_df_cache) for zero-latency filter slicing
+
+[x] Django REST Framework & Swagger Documentation:
+    - DRF ViewSets (/api/v1/datasets/, /api/v1/dashboards/, /api/v1/widgets/)
+    - JWT & Token authentication endpoints (/api/token/, /api/token/refresh/)
+    - Interactive OpenAPI 3.0 Swagger spec (/api/swagger/) and ReDoc (/api/redoc/)
+    - Django 6.1 compatibility patch for DRF
+
+[x] Export & Automation:
+    - 1-Click CSV telemetry data export (/export-csv/<dataset_id>/)
+    - Live auto-refresh polling dropdown (Off, 5s, 10s, 30s)
+    - Custom SVG favicon serving at /favicon.ico
+
+
+3. GIT COMMANDS USED TO INITIALIZE AND PUSH REPOSITORY
+--------------------------------------------------------------------------------
+# Initialize Git repository
+git init
+
+# Configure remote origin
+git remote add origin https://github.com/ManjunathGouda7/Django_PBI.git
+
+# Set main branch
+git branch -M main
+
+# Stage and commit all files
+git add .
+git commit -m "Initial commit: Production Power BI Telemetry Analytics Platform with DRF, MongoDB Ingestion, Authentication, and Interactive Scatter Engine"
+
+# Push to GitHub main branch
+git push -u origin main
+
+
+4. HOW TO RUN THE PLATFORM LOCALLY
+--------------------------------------------------------------------------------
+1. Activate virtual environment:
+   d:\Manju\PowerBI_Django\mgenv\Scripts\activate
+
+2. Run Django migrations:
+   python manage.py migrate
+
+3. Launch development server:
+   python manage.py runserver 0.0.0.0:8000
+
+4. Access Web Applications:
+   - Main Studio App : http://127.0.0.1:8000/
+   - Login Portal    : http://127.0.0.1:8000/login/
+   - Swagger API Docs: http://127.0.0.1:8000/api/swagger/
+   - Django Admin    : http://127.0.0.1:8000/admin/
+
+================================================================================
