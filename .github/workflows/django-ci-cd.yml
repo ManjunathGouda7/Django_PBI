@@ -1,0 +1,45 @@
+name: Django Power BI CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
+    steps:
+    - name: Check out Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Django System Checks & Migrations Check
+      run: |
+        cd BI
+        python manage.py check
+        python manage.py makemigrations --check --dry-run
+
+    - name: Validate Python Syntax
+      run: |
+        python -m compileall BI/
+
+    - name: Build Docker Image Validation
+      run: |
+        docker build -t powerbi-django:latest .

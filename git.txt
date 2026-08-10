@@ -41,6 +41,12 @@ Commit Author  : Manjunath Gouda (ManjunathGouda7)
     - Live auto-refresh polling dropdown (Off, 5s, 10s, 30s)
     - Custom SVG favicon serving at /favicon.ico
 
+[x] DevOps & Production CI/CD Pipeline:
+    - Multi-stage Dockerfile containerizing Django + Gunicorn WSGI server
+    - Docker Compose (docker-compose.yml) orchestrating Django, MongoDB, and Redis
+    - GitHub Actions CI/CD pipeline (.github/workflows/django-ci-cd.yml)
+    - DEVOPS.md production deployment & Nginx proxy setup guide
+
 
 3. GIT COMMANDS USED TO INITIALIZE AND PUSH REPOSITORY
 --------------------------------------------------------------------------------

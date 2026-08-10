@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Django Web Application Container
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: powerbi_django_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
+      - ALLOWED_HOSTS=*
+      - MONGODB_URL=mongodb://mongo:27017
+    depends_on:
+      - mongo
+      - redis
+
+  # MongoDB Database Container
+  mongo:
+    image: mongo:latest
+    container_name: powerbi_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # Redis Cache Container
+  redis:
+    image: redis:alpine
+    container_name: powerbi_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  mongo_data:
