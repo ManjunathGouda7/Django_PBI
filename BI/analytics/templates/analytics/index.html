@@ -60,8 +60,7 @@
                 <i class="fa-solid fa-user-shield text-success"></i>
                 <span style="font-weight:600; color: #f8fafc;">{{ request.user.username }}</span>
                 <span class="badge badge-primary"
-                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{
-                    user_role_display }}</span>
+                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{ user_role_display|default:"Admin" }}</span>
                 <a href="{% url 'analytics:logout' %}" class="btn btn-xs btn-outline"
                     style="padding: 2px 8px; font-size: 0.72rem; color: #f87171; border-color: rgba(248,113,113,0.4);"
                     title="Sign Out">
