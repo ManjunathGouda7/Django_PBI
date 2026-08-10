@@ -1427,22 +1427,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Auto-Refresh Live Polling Handler
-    let autoRefreshTimer = null;
-    const autoRefreshSelect = document.getElementById('auto-refresh-select');
-    if (autoRefreshSelect) {
-        autoRefreshSelect.addEventListener('change', (e) => {
-            const intervalSec = parseInt(e.target.value);
-            if (autoRefreshTimer) {
-                clearInterval(autoRefreshTimer);
-                autoRefreshTimer = null;
-            }
-            if (intervalSec > 0) {
-                autoRefreshTimer = setInterval(() => {
-                    if (state.activeDashboardId) {
-                        loadDashboard(state.activeDashboardId);
-                    }
-                }, intervalSec * 1000);
+    // Natural Language Telemetry AI Q&A Assistant Handler
+    const aiQaInput = document.getElementById('input-ai-qa');
+    if (aiQaInput) {
+        aiQaInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value.trim().toLowerCase();
+                if (!query) return;
+
+                // Match common telemetry parameters naturally
+                if (query.includes('iphone1')) {
+                    state.activeSlicers['DUT'] = ['Iphone1'];
+                } else if (query.includes('iphone2')) {
+                    state.activeSlicers['DUT'] = ['Iphone2new'];
+                } else if (query.includes('tpr')) {
+                    state.activeSlicers['DUT'] = ['TPR'];
+                } else if (query.includes('lpm')) {
+                    state.activeSlicers['PowerMode'] = ['LPM'];
+                } else if (query.includes('hpm')) {
+                    state.activeSlicers['PowerMode'] = ['HPM'];
+                } else if (query.includes('npm')) {
+                    state.activeSlicers['PowerMode'] = ['NPM'];
+                } else if (query.includes('gtpt106')) {
+                    state.activeSlicers['Board'] = ['GTPT106'];
+                } else if (query.includes('gtpt118')) {
+                    state.activeSlicers['Board'] = ['GTPT118'];
+                } else if (query.includes('tpr129')) {
+                    state.activeSlicers['Board'] = ['TPR129_GTPT'];
+                } else {
+                    // Search across Board or DUT values
+                    state.activeSlicers['Board'] = [query.toUpperCase()];
+                }
+
+                if (state.activeDashboardId) {
+                    loadDashboard(state.activeDashboardId);
+                }
             }
         });
     }

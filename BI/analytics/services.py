@@ -272,12 +272,25 @@ class DatasetEngine:
                             'color': '#00A4EF'
                         })
 
+                    # Calculate Target Specification Limits (Upper & Lower Bounds)
+                    target_upper = None
+                    target_lower = None
+                    anomalies = []
+                    all_y = pd.to_numeric(df[y_col], errors='coerce').dropna()
+                    if not all_y.empty:
+                        y_mean = float(all_y.mean())
+                        y_std = float(all_y.std())
+                        target_upper = round(y_mean + 2 * y_std, 2)
+                        target_lower = round(max(0, y_mean - 2 * y_std), 2)
+
                     return {
                         'labels': [],
                         'datasets': datasets,
                         'x_col': x_col,
                         'y_col': y_col,
-                        'group_col': group_col or ''
+                        'group_col': group_col or '',
+                        'target_upper': target_upper,
+                        'target_lower': target_lower
                     }
                 except Exception as e:
                     print(f"Scatter plot error: {e}")
