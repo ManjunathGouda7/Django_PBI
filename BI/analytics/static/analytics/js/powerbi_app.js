@@ -919,11 +919,17 @@ document.addEventListener('DOMContentLoaded', () => {
         widgets.forEach(w => {
             const card = document.createElement('div');
             card.className = `visual-card ${state.selectedWidgetId === w.id ? 'selected' : ''}`;
-            const colSpan = (widgets.length === 1 || ['scatter', 'table', 'line', 'area'].includes(w.visual_type)) ? 12 : (w.width || 6);
-            const rowSpan = (widgets.length === 1 && w.visual_type === 'scatter') ? 7 : (w.height || 5);
+            const vType = String(w.visual_type || '').toLowerCase();
+            const isFullWidth = (widgets.length === 1 || ['scatter', 'table', 'line', 'area'].includes(vType));
+            const colSpan = isFullWidth ? 12 : (w.width || 6);
+            const rowSpan = (vType === 'scatter') ? 7 : (w.height || 5);
             card.style.gridColumn = `span ${colSpan}`;
             card.style.gridRow = `span ${rowSpan}`;
+            if (isFullWidth) {
+                card.style.minHeight = '560px';
+            }
             card.dataset.widgetId = w.id;
+
 
 
             card.innerHTML = `
