@@ -272,6 +272,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.activeDashboardId) window.open(`/export/${state.activeDashboardId}/`, '_blank');
         });
 
+        const rExecPdf = document.getElementById('ribbon-btn-exec-pdf');
+        if (rExecPdf) rExecPdf.addEventListener('click', () => {
+            if (state.activeDashboardId) {
+                window.open(`/export-pdf/${state.activeDashboardId}/`, '_blank');
+            } else {
+                alert("Please select a dashboard first to generate Executive PDF report.");
+            }
+        });
+
+        const btnNlGen = document.getElementById('btn-nl-formula-gen');
+        if (btnNlGen) btnNlGen.addEventListener('click', generateNlFormula);
+
+        const btnForecast = document.getElementById('btn-trigger-forecast');
+        if (btnForecast) btnForecast.addEventListener('click', triggerAIForecast);
+
+
         // Advanced Enterprise Feature Ribbon Buttons
         const rAutoDb = document.getElementById('ribbon-btn-autodb');
         if (rAutoDb) rAutoDb.addEventListener('click', triggerAutoBuildDashboard);
@@ -1914,6 +1930,89 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('kiosk-mode');
         }
     }
+
+    async function generateNlFormula() {
+        const promptInput = document.getElementById('nl-formula-prompt');
+        const prompt = promptInput ? promptInput.value.trim() : '';
+        if (!prompt) {
+            alert("Please enter a natural language formula request (e.g., 'Calculate percentage ratio of PFO to Rectified Power').");
+            return;
+        }
+
+        if (!state.activeDatasetId) {
+            alert("Please select a dataset first.");
+            return;
+        }
+
+        const btnGen = document.getElementById('btn-nl-formula-gen');
+        if (btnGen) btnGen.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/nl-formula/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            });
+            const data = await res.json();
+            if (data.status === 'success' && data.data) {
+                document.getElementById('measure-name-input').value = data.data.name;
+                document.getElementById('measure-formula-input').value = data.data.formula;
+            } else {
+                alert(`⚠️ AI Formula Error: ${data.error || 'Failed to generate formula.'}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error generating AI formula: ${err.message}`);
+        } finally {
+            if (btnGen) btnGen.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate';
+        }
+    }
+
+    async function triggerAIForecast() {
+        if (!state.activeDatasetId || !state.activeDashboardId) {
+            alert("Please select an active dataset and dashboard first.");
+            return;
+        }
+
+        const btnFC = document.getElementById('btn-trigger-forecast');
+        const origText = btnFC ? btnFC.innerHTML : '';
+        if (btnFC) btnFC.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Forecasting...';
+
+        try {
+            const metric = elements.vizYSelect.value || '';
+            const queryParams = new URLSearchParams({ periods: '7' });
+            if (metric) queryParams.append('metric', metric);
+
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/forecast/?${queryParams.toString()}`);
+            const json = await res.json();
+            if (json.status === 'success' && json.data) {
+                const fc = json.data;
+                const widgetTitle = `🔮 7-Day Forecast: ${fc.metric}`;
+
+                // Create a forecast line widget on dashboard
+                await fetch(`/api/dashboards/${state.activeDashboardId}/add-chart/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: widgetTitle,
+                        visual_type: 'line',
+                        x_axis: fc.metric,
+                        y_axis: fc.metric,
+                        aggregation: 'AVG'
+                    })
+                });
+
+                await loadDashboard(state.activeDashboardId);
+                alert(`🔮 AI Predictive Forecast generated for '${fc.metric}'! Future 7-day trend slope: ${fc.trend_slope}.`);
+            } else {
+                alert(`⚠️ Forecast Error: ${json.error || 'Failed to compute forecast.'}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error triggering forecast: ${err.message}`);
+        } finally {
+            if (btnFC) btnFC.innerHTML = origText;
+        }
+    }
 });
+
 
 

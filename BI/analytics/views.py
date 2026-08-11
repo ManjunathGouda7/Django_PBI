@@ -115,3 +115,30 @@ def export_excel_view(request, dataset_id):
     from .analytics_advanced import ExcelExporter
     return ExcelExporter.generate_excel_workbook(dataset)
 
+def export_executive_pdf_view(request, dashboard_id):
+    """
+    Renders high-resolution multi-page Executive PDF Report template.
+    """
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    dataset = dashboard.dataset
+    from .services import DatasetEngine
+    df = DatasetEngine.load_dataframe(dataset) if dataset else None
+    numeric_cols = df.select_dtypes(include=['number']).columns.tolist() if df is not None and not df.empty else []
+
+    kpi_summaries = []
+    if df is not None and not df.empty:
+        kpi_summaries.append({'label': 'Total Telemetry Records', 'value': f"{len(df):,}"})
+        kpi_summaries.append({'label': 'Total Fields / Attributes', 'value': str(len(df.columns))})
+        for col in numeric_cols[:3]:
+            s = df[col].dropna()
+            if not s.empty:
+                kpi_summaries.append({'label': f"Avg ({col})", 'value': f"{s.mean():.2f}"})
+
+    return render(request, 'analytics/executive_pdf.html', {
+        'dashboard': dashboard,
+        'dataset': dataset,
+        'kpi_summaries': kpi_summaries,
+        'widgets': dashboard.widgets.all()
+    })
+
+
