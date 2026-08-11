@@ -141,6 +141,24 @@ class DatasetEngine:
         _df_cache[cache_key] = df
         return df.copy()
 
+    @staticmethod
+    def load_dataframe_chunks(dataset, chunksize=10000):
+        """
+        Memory-efficient streaming generator for massive CSV telemetry datasets.
+        Yields DataFrames in streaming chunks of specified size.
+        """
+        if dataset.file and os.path.exists(dataset.file.path) and (dataset.file_type == 'csv' or dataset.file.path.endswith('.csv')):
+            for chunk in pd.read_csv(dataset.file.path, chunksize=chunksize):
+                yield chunk
+        else:
+            df = DatasetEngine.load_dataframe(dataset)
+            if df.empty:
+                yield df
+            else:
+                for i in range(0, len(df), chunksize):
+                    yield df.iloc[i:i + chunksize]
+
+
 
 def clear_dataset_cache(dataset_id=None):
     """

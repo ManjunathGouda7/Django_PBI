@@ -181,5 +181,11 @@ class EnterpriseAdvancedTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Executive Telemetry Report", response.content)
 
+    def test_load_dataframe_chunks(self):
+        from .services import DatasetEngine
+        chunks = list(DatasetEngine.load_dataframe_chunks(self.dataset, chunksize=2))
+        self.assertTrue(len(chunks) >= 1)
+
+
 
 
