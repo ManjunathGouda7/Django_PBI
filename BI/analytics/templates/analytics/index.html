@@ -59,9 +59,6 @@
                 style="display:flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.1);">
                 <i class="fa-solid fa-user-shield text-success"></i>
                 <span style="font-weight:600; color: #f8fafc;">{{ request.user.username }}</span>
-                <span class="badge badge-primary"
-                    style="font-size:0.68rem; padding: 2px 6px; background: rgba(0,164,239,0.2); color:#00A4EF; border:1px solid rgba(0,164,239,0.4); border-radius:10px;">{{
-                    user_role_display|default:"Admin" }}</span>
                 <a href="{% url 'analytics:logout' %}" class="btn btn-xs btn-outline"
                     style="padding: 2px 8px; font-size: 0.72rem; color: #f87171; border-color: rgba(248,113,113,0.4);"
                     title="Sign Out">
@@ -75,14 +72,15 @@
     <div class="pbi-ribbon-bar">
         <div class="ribbon-tab active"><i class="fa-solid fa-house text-accent"></i> Home</div>
         <div class="ribbon-tab" id="ribbon-btn-getdata"><i class="fa-solid fa-table text-primary"></i> Get Data</div>
-        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh Data
-        </div>
-        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers & Filters
-        </div>
-        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-success"></i> Export CSV</div>
+        <div class="ribbon-tab" id="ribbon-btn-autodb"><i class="fa-solid fa-wand-magic-sparkles text-warning"></i> AI Auto-Dashboard</div>
+        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh Data</div>
+        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers & Filters</div>
+        <div class="ribbon-tab" id="ribbon-btn-excel"><i class="fa-solid fa-file-excel text-success"></i> Export Excel</div>
+        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-primary"></i> Export CSV</div>
         <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> Export PDF</div>
+        <div class="ribbon-tab" id="ribbon-btn-kiosk"><i class="fa-solid fa-tv text-accent"></i> Kiosk Mode</div>
         <div class="ribbon-qa-box"
-            style="display:flex; align-items:center; gap:0.4rem; margin-left:1.5rem; flex:1; max-width:320px;">
+            style="display:flex; align-items:center; gap:0.4rem; margin-left:1rem; flex:1; max-width:280px;">
             <div style="position:relative; width:100%;">
                 <i class="fa-solid fa-wand-magic-sparkles text-accent"
                     style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:0.75rem;"></i>
@@ -102,6 +100,7 @@
             </select>
         </div>
     </div>
+
 
     <!-- Main Workspace (3-Pane Layout) -->
     <main class="pbi-workspace">
@@ -147,9 +146,11 @@
                     </button>
                 </div>
 
-
+                </div>
 
                 <!-- Interactive Visual Canvas -->
+
+
                 <div class="pbi-canvas-grid" id="canvas-grid">
                     <!-- Dynamic Visual Cards will be rendered here -->
                 </div>
@@ -259,12 +260,19 @@
                     </h2>
                     <span class="badge badge-lg" id="dv-row-badge">0 Rows</span>
                 </div>
-                <div class="data-controls">
+                <div class="data-controls" style="display:flex; align-items:center; gap:0.5rem;">
+                    <button class="btn btn-sm btn-outline" id="btn-open-clean-modal" title="Clean Nulls & Duplicates">
+                        <i class="fa-solid fa-broom text-warning"></i> Data Cleaning
+                    </button>
+                    <button class="btn btn-sm btn-outline" id="btn-open-measure-modal" title="Add Calculated Measure Column">
+                        <i class="fa-solid fa-calculator text-accent"></i> Add Measure
+                    </button>
                     <div class="pane-search search-lg">
                         <i class="fa-solid fa-search"></i>
                         <input type="text" id="dv-search-input" placeholder="Search dataset rows...">
                     </div>
                 </div>
+
             </div>
 
             <!-- Tabular Grid -->
@@ -295,8 +303,58 @@
             </div>
         </div>
 
+        <!-- View Mode 3: DATASET MODEL & SCHEMA VIEW -->
+        <div id="view-model" class="pbi-view-container" style="padding:1.2rem; display:none; flex-direction:column; gap:1rem; flex:1; overflow-y:auto;">
+            <div class="model-view-header" style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:0.75rem;">
+                <div class="model-info">
+                    <h3 style="margin:0; font-size:1.1rem; color:var(--text-main); font-weight:700;">
+                        <i class="fa-solid fa-diagram-project text-accent"></i> Data Model & Schema Inspector
+                    </h3>
+                    <p style="margin:0.2rem 0 0 0; font-size:0.78rem; color:var(--text-muted);">Inspect dataset metadata, column data types, field distributions, storage mode, and sample data.</p>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <button class="btn btn-sm btn-primary" id="btn-open-join-modal" title="Merge 2 Datasets on Shared Key Field">
+                        <i class="fa-solid fa-code-merge"></i> Join Datasets (VLOOKUP)
+                    </button>
+                    <div class="model-active-badge" id="model-active-ds-title" style="background:rgba(0,164,239,0.15); border:1px solid rgba(0,164,239,0.3); padding:6px 14px; border-radius:16px; font-size:0.8rem; color:#38bdf8; font-weight:600;">
+                        <i class="fa-solid fa-database text-accent"></i> No Dataset Active
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Model Metrics Cards -->
+            <div class="model-summary-cards" id="model-summary-cards" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:0.75rem;">
+                <!-- Dynamically populated cards -->
+            </div>
+
+            <!-- Schema Columns Table -->
+            <div class="data-view-table-wrapper" style="flex:1; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md);">
+                <table class="pbi-data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Column Field Name</th>
+                            <th>Data Type</th>
+                            <th>Unique Count</th>
+                            <th>Null Count</th>
+                            <th>Min Value</th>
+                            <th>Max Value</th>
+                            <th>Sample Values</th>
+                        </tr>
+                    </thead>
+                    <tbody id="model-schema-table-body">
+                        <tr>
+                            <td colspan="8" style="text-align:center; color:var(--text-muted); padding:2rem;">Select a dataset to view model schema</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </main>
 </div>
+
 
 <!-- Modal 1: GET DATA / UPLOAD DATASET -->
 <div class="pbi-modal-backdrop" id="modal-get-data">
@@ -325,8 +383,8 @@
                         required>
                 </div>
                 <div class="form-group">
-                    <label>Select File (CSV / XLSX)</label>
-                    <input type="file" id="upload-file-input" class="pbi-input-file" accept=".csv, .xlsx, .xls"
+                    <label>Select File (CSV / JSON / XLSX)</label>
+                    <input type="file" id="upload-file-input" class="pbi-input-file" accept=".csv, .json, .xlsx, .xls"
                         required>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">
@@ -429,6 +487,176 @@
                 </div>
                 <button type="submit" class="btn btn-success btn-block" style="margin-top: 1rem;">
                     <i class="fa-solid fa-check"></i> Create Dashboard
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Slide-out AI Data Chat Assistant Drawer -->
+<div class="pbi-chat-drawer" id="pbi-chat-drawer">
+    <div class="chat-drawer-header">
+        <div class="chat-header-title">
+            <i class="fa-solid fa-robot text-accent" style="font-size:1.4rem;"></i>
+            <div>
+                <h4 style="margin:0; font-size:0.95rem; font-weight:700;">Telemetry AI Data Chat</h4>
+                <div class="chat-active-dataset-badge" id="chat-active-dataset-label" style="font-size:0.72rem; color:var(--text-muted);">
+                    <i class="fa-solid fa-database text-accent"></i> <span id="chat-active-ds-name">Select Dataset</span>
+                </div>
+            </div>
+        </div>
+        <div class="chat-header-actions" style="display:flex; align-items:center; gap:0.4rem;">
+            <select id="chat-dataset-select" class="pbi-select select-sm" style="max-width:140px; font-size:0.75rem;" title="Switch Chat Dataset">
+            </select>
+            <button class="btn btn-sm btn-outline" id="chat-upload-direct-btn" title="Upload File & Chat">
+                <i class="fa-solid fa-upload"></i>
+            </button>
+            <button class="chat-drawer-close" id="close-chat-drawer">&times;</button>
+        </div>
+    </div>
+
+    <!-- Hidden quick file upload for chat drawer -->
+    <input type="file" id="chat-direct-file-input" accept=".csv, .json, .xlsx, .xls" style="display:none;">
+
+    <!-- Messages Container -->
+    <div class="chat-drawer-messages" id="chat-drawer-messages">
+        <div class="chat-welcome-msg">
+            <div class="welcome-icon" style="font-size:2rem; margin-bottom:0.5rem;"><i class="fa-solid fa-wand-magic-sparkles text-accent"></i></div>
+            <h3 style="margin-bottom:0.4rem; font-size:1.1rem;">Welcome to Data Chat!</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted); line-height:1.4; margin-bottom:1rem;">Upload or select any <strong>CSV, JSON, or Excel</strong> file to ask natural language questions, get data summaries, calculate stats, rank top records, or analyze distributions.</p>
+            <div class="chat-quick-prompts-container" id="chat-welcome-prompts">
+                <button class="quick-prompt-chip" data-prompt="Summarize this dataset"><i class="fa-solid fa-chart-pie text-accent"></i> Summarize Dataset</button>
+                <button class="quick-prompt-chip" data-prompt="Plot chart options"><i class="fa-solid fa-chart-line text-primary"></i> Plot Chart Options</button>
+                <button class="quick-prompt-chip" data-prompt="Show data health check"><i class="fa-solid fa-shield-halved text-success"></i> Data Health Check</button>
+                <button class="quick-prompt-chip" data-prompt="Show top 5 records"><i class="fa-solid fa-trophy text-warning"></i> Top 5 Records</button>
+                <button class="quick-prompt-chip" data-prompt="Calculate average metrics"><i class="fa-solid fa-calculator text-info"></i> Calculate Averages</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Input Footer -->
+    <div class="chat-drawer-footer">
+        <div class="chat-input-wrapper">
+            <textarea id="chat-input-textarea" placeholder="Ask anything about your dataset (e.g. 'Show average power by Board')..." rows="1"></textarea>
+            <button id="chat-send-btn" class="btn btn-accent btn-icon" title="Send Query">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+        <div class="chat-footer-hint">
+            <i class="fa-solid fa-shield-cat text-success"></i> Real-time Pandas Engine • Instant Analysis
+        </div>
+    </div>
+</div>
+
+<!-- Floating Action Button for Data Chat -->
+<button class="pbi-chat-fab" id="pbi-chat-fab" title="Open AI Data Chat Assistant">
+    <i class="fa-solid fa-wand-magic-sparkles"></i>
+    <span>AI Data Chat</span>
+</button>
+
+<!-- Modal 3: JOIN DATASETS (VLOOKUP / MERGE) -->
+<div class="pbi-modal-backdrop" id="modal-join-datasets">
+    <div class="pbi-modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-code-merge text-primary"></i> Multi-Dataset Join (VLOOKUP / Merge)</h3>
+            <button class="modal-close" id="close-modal-join">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="join-datasets-form">
+                <div class="form-group">
+                    <label>Joined Dataset Output Display Name</label>
+                    <input type="text" id="join-name-input" class="pbi-input" placeholder="e.g. Telemetry + Board Specs" required>
+                </div>
+                <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.6rem;">
+                    <div class="form-group">
+                        <label>Primary Dataset (Left Table)</label>
+                        <select id="join-ds1-select" class="pbi-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Left Key Column</label>
+                        <input type="text" id="join-key1-input" class="pbi-input" placeholder="e.g. Board" required>
+                    </div>
+                </div>
+                <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.6rem;">
+                    <div class="form-group">
+                        <label>Secondary Dataset (Right Table)</label>
+                        <select id="join-ds2-select" class="pbi-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Right Key Column</label>
+                        <input type="text" id="join-key2-input" class="pbi-input" placeholder="e.g. Board" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Join Type</label>
+                    <select id="join-type-select" class="pbi-select">
+                        <option value="inner">Inner Join (Matching rows only)</option>
+                        <option value="left">Left Outer Join (Keep all left rows)</option>
+                        <option value="outer">Full Outer Join (Keep all rows)</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" style="margin-top:0.5rem;">
+                    <i class="fa-solid fa-code-merge"></i> Merge Datasets
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 4: DATA CLEANING -->
+<div class="pbi-modal-backdrop" id="modal-clean-data">
+    <div class="pbi-modal modal-sm">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-broom text-warning"></i> Data Cleaning & Quality Tool</h3>
+            <button class="modal-close" id="close-modal-clean">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="clean-dataset-form">
+                <div class="form-group">
+                    <label>Null Value Handling</label>
+                    <select id="clean-null-select" class="pbi-select">
+                        <option value="">Do Not Modify Nulls</option>
+                        <option value="mean">Fill Numerical Nulls with Column Mean (Average)</option>
+                        <option value="zero">Fill All Nulls with Zero (0)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.6rem;">
+                    <input type="checkbox" id="clean-dup-check" style="accent-color:#00a4ef;">
+                    <label for="clean-dup-check" style="margin:0; cursor:pointer;">Remove Duplicate Rows</label>
+                </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="clean-dropnull-check" style="accent-color:#f59e0b;">
+                    <label for="clean-dropnull-check" style="margin:0; cursor:pointer;">Drop Rows Containing Any Missing Cell</label>
+                </div>
+                <button type="submit" class="btn btn-warning btn-block" style="margin-top:1rem;">
+                    <i class="fa-solid fa-broom"></i> Execute Data Cleaning
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 5: ADD CALCULATED MEASURE -->
+<div class="pbi-modal-backdrop" id="modal-add-measure">
+    <div class="pbi-modal modal-sm">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-calculator text-accent"></i> Add Calculated Measure Column</h3>
+            <button class="modal-close" id="close-modal-measure">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="add-measure-form">
+                <div class="form-group">
+                    <label>Measure Field Name</label>
+                    <input type="text" id="measure-name-input" class="pbi-input" placeholder="e.g. Power_Watts" required>
+                </div>
+                <div class="form-group">
+                    <label>Pandas Expression / Formula</label>
+                    <input type="text" id="measure-formula-input" class="pbi-input" placeholder="e.g. PFO_mW / 1000" required>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Examples: <code>colA * 1.15</code>, <code>colA / colB</code>, <code>colA + 100</code></div>
+                </div>
+                <button type="submit" class="btn btn-accent btn-block" style="margin-top:1rem;">
+                    <i class="fa-solid fa-plus"></i> Add Calculated Column
                 </button>
             </form>
         </div>

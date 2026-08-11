@@ -106,3 +106,12 @@ def export_csv_view(request, dataset_id):
     response['Content-Disposition'] = f'attachment; filename="{dataset.name}_telemetry.csv"'
     df.to_csv(path_or_buf=response, index=False)
     return response
+
+def export_excel_view(request, dataset_id):
+    """
+    Downloads multi-sheet formatted Excel workbook (.xlsx).
+    """
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    from .analytics_advanced import ExcelExporter
+    return ExcelExporter.generate_excel_workbook(dataset)
+

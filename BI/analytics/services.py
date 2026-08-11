@@ -244,7 +244,7 @@ class DatasetEngine:
                             sub_df = df[df[group_col] == g_val][[x_col, y_col]].dropna()
                             x_nums = pd.to_numeric(sub_df[x_col], errors='coerce')
                             y_nums = pd.to_numeric(sub_df[y_col], errors='coerce')
-                            valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums.between(-1000, 1000))
+                            valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums >= -1000) & (y_nums <= 1000)
 
                             x_arr = np.round(x_nums[valid_mask].head(2500).to_numpy(), 2).tolist()
                             y_arr = np.round(y_nums[valid_mask].head(2500).to_numpy(), 2).tolist()
@@ -260,7 +260,7 @@ class DatasetEngine:
                         sub_df = df[[x_col, y_col]].dropna()
                         x_nums = pd.to_numeric(sub_df[x_col], errors='coerce')
                         y_nums = pd.to_numeric(sub_df[y_col], errors='coerce')
-                        valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums.between(-1000, 1000))
+                        valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums >= -1000) & (y_nums <= 1000)
 
                         x_arr = np.round(x_nums[valid_mask].head(4000).to_numpy(), 2).tolist()
                         y_arr = np.round(y_nums[valid_mask].head(4000).to_numpy(), 2).tolist()

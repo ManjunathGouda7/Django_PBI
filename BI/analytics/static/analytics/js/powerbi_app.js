@@ -37,8 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Navigation Views
         navReport: document.getElementById('nav-report-view'),
         navData: document.getElementById('nav-data-view'),
+        navModel: document.getElementById('nav-model-view'),
         viewReport: document.getElementById('view-report'),
         viewData: document.getElementById('view-data'),
+        viewModel: document.getElementById('view-model'),
 
         // Fields Pane
         fieldsTreeContainer: document.getElementById('fields-tree-container'),
@@ -112,12 +114,15 @@ document.addEventListener('DOMContentLoaded', () => {
         bindEvents();
         await fetchDatasets();
         await fetchDashboards();
+        initDataChatController();
     }
 
     function bindEvents() {
         // Navigation Switcher
         elements.navReport.addEventListener('click', () => switchView('report'));
         elements.navData.addEventListener('click', () => switchView('data'));
+        if (elements.navModel) elements.navModel.addEventListener('click', () => switchView('model'));
+
 
         if (elements.btnResetVizForm) {
             elements.btnResetVizForm.addEventListener('click', resetWidgetForm);
@@ -266,22 +271,91 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rPdf) rPdf.addEventListener('click', () => {
             if (state.activeDashboardId) window.open(`/export/${state.activeDashboardId}/`, '_blank');
         });
+
+        // Advanced Enterprise Feature Ribbon Buttons
+        const rAutoDb = document.getElementById('ribbon-btn-autodb');
+        if (rAutoDb) rAutoDb.addEventListener('click', triggerAutoBuildDashboard);
+
+        const rExcel = document.getElementById('ribbon-btn-excel');
+        if (rExcel) rExcel.addEventListener('click', () => {
+            if (state.activeDatasetId) {
+                window.location.href = `/export-excel/${state.activeDatasetId}/`;
+            } else {
+                alert("Please select a dataset first to export Excel workbook.");
+            }
+        });
+
+        const rKiosk = document.getElementById('ribbon-btn-kiosk');
+        if (rKiosk) rKiosk.addEventListener('click', toggleKioskMode);
+
+        // Data Cleaning & Measures Modal Triggers
+        const mCleanOpen = document.getElementById('btn-open-clean-modal');
+        const mCleanClose = document.getElementById('close-modal-clean');
+        const mCleanModal = document.getElementById('modal-clean-data');
+        if (mCleanOpen && mCleanModal) mCleanOpen.addEventListener('click', () => openModal(mCleanModal));
+        if (mCleanClose && mCleanModal) mCleanClose.addEventListener('click', () => closeModal(mCleanModal));
+
+        const mMeasureOpen = document.getElementById('btn-open-measure-modal');
+        const mMeasureClose = document.getElementById('close-modal-measure');
+        const mMeasureModal = document.getElementById('modal-add-measure');
+        if (mMeasureOpen && mMeasureModal) mMeasureOpen.addEventListener('click', () => openModal(mMeasureModal));
+        if (mMeasureClose && mMeasureModal) mMeasureClose.addEventListener('click', () => closeModal(mMeasureModal));
+
+        const mJoinOpen = document.getElementById('btn-open-join-modal');
+        const mJoinClose = document.getElementById('close-modal-join');
+        const mJoinModal = document.getElementById('modal-join-datasets');
+        if (mJoinOpen && mJoinModal) mJoinOpen.addEventListener('click', () => {
+            populateJoinDatasetsModal();
+            openModal(mJoinModal);
+        });
+        if (mJoinClose && mJoinModal) mJoinClose.addEventListener('click', () => closeModal(mJoinModal));
+
+        // Form Handlers
+        const formClean = document.getElementById('clean-dataset-form');
+        if (formClean) formClean.addEventListener('submit', handleCleanDataset);
+
+        const formMeasure = document.getElementById('add-measure-form');
+        if (formMeasure) formMeasure.addEventListener('submit', handleAddMeasure);
+
+        const formJoin = document.getElementById('join-datasets-form');
+        if (formJoin) formJoin.addEventListener('submit', handleJoinDatasets);
+
+        // Anomaly Filter button
+        const btnFilterAnomalies = document.getElementById('btn-filter-anomalies');
+        if (btnFilterAnomalies) btnFilterAnomalies.addEventListener('click', toggleAnomalyFilter);
     }
+
 
     function switchView(viewName) {
         if (viewName === 'report') {
             elements.navReport.classList.add('active');
             elements.navData.classList.remove('active');
+            if (elements.navModel) elements.navModel.classList.remove('active');
             elements.viewReport.classList.add('active');
             elements.viewData.classList.remove('active');
+            if (elements.viewModel) elements.viewModel.style.display = 'none';
         } else if (viewName === 'data') {
             elements.navReport.classList.remove('active');
             elements.navData.classList.add('active');
+            if (elements.navModel) elements.navModel.classList.remove('active');
             elements.viewReport.classList.remove('active');
             elements.viewData.classList.add('active');
+            if (elements.viewModel) elements.viewModel.style.display = 'none';
             loadDataViewRows();
+        } else if (viewName === 'model') {
+            elements.navReport.classList.remove('active');
+            elements.navData.classList.remove('active');
+            if (elements.navModel) elements.navModel.classList.add('active');
+            elements.viewReport.classList.remove('active');
+            elements.viewData.classList.remove('active');
+            if (elements.viewModel) {
+                elements.viewModel.style.display = 'flex';
+                elements.viewModel.classList.add('active');
+            }
+            loadModelViewSchema();
         }
     }
+
 
     function switchRightPane(pane) {
         if (pane === 'viz') {
@@ -346,6 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.datasetSelect.innerHTML = html;
         elements.newDbDatasetSelect.innerHTML = '<option value="">Select Dataset</option>' + html;
 
+        const chatSelect = document.getElementById('chat-dataset-select');
+        if (chatSelect) {
+            chatSelect.innerHTML = html || '<option value="">No Datasets</option>';
+            if (state.activeDatasetId) chatSelect.value = state.activeDatasetId;
+        }
+
         if (state.activeDatasetId) {
             elements.datasetSelect.value = state.activeDatasetId;
         }
@@ -399,6 +479,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (elements.viewData.classList.contains('active')) {
                 loadDataViewRows();
+            }
+            if (elements.viewModel && elements.viewModel.style.display !== 'none') {
+                loadModelViewSchema();
             }
         }
     }
@@ -819,9 +902,12 @@ document.addEventListener('DOMContentLoaded', () => {
         widgets.forEach(w => {
             const card = document.createElement('div');
             card.className = `visual-card ${state.selectedWidgetId === w.id ? 'selected' : ''}`;
-            card.style.gridColumn = `span ${w.width || 6}`;
-            card.style.gridRow = `span ${w.height || 4}`;
+            const colSpan = (widgets.length === 1 || ['scatter', 'table', 'line', 'area'].includes(w.visual_type)) ? 12 : (w.width || 6);
+            const rowSpan = (widgets.length === 1 && w.visual_type === 'scatter') ? 7 : (w.height || 5);
+            card.style.gridColumn = `span ${colSpan}`;
+            card.style.gridRow = `span ${rowSpan}`;
             card.dataset.widgetId = w.id;
+
 
             card.innerHTML = `
                 <div class="visual-card-header">
@@ -1156,6 +1242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             yAxisVal = numCol ? numCol.name : (state.activeDataset.column_schema[1] ? state.activeDataset.column_schema[1].name : '');
         }
 
+        const isFullWidthType = ['scatter', 'table', 'line', 'area'].includes(state.activeVisualType);
         const payload = {
             title: elements.vizTitleInput.value.trim() || `${state.activeVisualType.toUpperCase()} Chart`,
             visual_type: state.activeVisualType,
@@ -1163,9 +1250,10 @@ document.addEventListener('DOMContentLoaded', () => {
             y_axis: yAxisVal,
             group_by: groupVal,
             aggregation: 'AVG',
-            width: existingWidget && existingWidget.width ? existingWidget.width : 12,
-            height: existingWidget && existingWidget.height ? existingWidget.height : 8
+            width: isFullWidthType ? 12 : (existingWidget && existingWidget.width ? existingWidget.width : 6),
+            height: isFullWidthType ? 7 : (existingWidget && existingWidget.height ? existingWidget.height : 5)
         };
+
 
         try {
             let res;
@@ -1302,6 +1390,9 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.uploadForm.reset();
             await fetchDatasets();
             setDataset(data.dataset.id);
+            if (window.openDataChatWithPrompt) {
+                window.openDataChatWithPrompt('Summarize this dataset');
+            }
         } catch (err) {
             console.error("Failed uploading dataset", err);
         }
@@ -1427,42 +1518,402 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Natural Language Telemetry AI Q&A Assistant Handler
-    const aiQaInput = document.getElementById('input-ai-qa');
-    if (aiQaInput) {
-        aiQaInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const query = e.target.value.trim().toLowerCase();
-                if (!query) return;
+    // ==========================================================================
+    // AI DATA CHAT ASSISTANT CONTROLLER
+    // ==========================================================================
+    function initDataChatController() {
+        const chatDrawer = document.getElementById('pbi-chat-drawer');
+        const chatFab = document.getElementById('pbi-chat-fab');
+        const closeChatDrawer = document.getElementById('close-chat-drawer');
+        const chatSelect = document.getElementById('chat-dataset-select');
+        const chatActiveDsName = document.getElementById('chat-active-ds-name');
+        const chatMessages = document.getElementById('chat-drawer-messages');
+        const chatInput = document.getElementById('chat-input-textarea');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+        const chatUploadBtn = document.getElementById('chat-upload-direct-btn');
+        const chatDirectFileInput = document.getElementById('chat-direct-file-input');
 
-                // Match common telemetry parameters naturally
-                if (query.includes('iphone1')) {
-                    state.activeSlicers['DUT'] = ['Iphone1'];
-                } else if (query.includes('iphone2')) {
-                    state.activeSlicers['DUT'] = ['Iphone2new'];
-                } else if (query.includes('tpr')) {
-                    state.activeSlicers['DUT'] = ['TPR'];
-                } else if (query.includes('lpm')) {
-                    state.activeSlicers['PowerMode'] = ['LPM'];
-                } else if (query.includes('hpm')) {
-                    state.activeSlicers['PowerMode'] = ['HPM'];
-                } else if (query.includes('npm')) {
-                    state.activeSlicers['PowerMode'] = ['NPM'];
-                } else if (query.includes('gtpt106')) {
-                    state.activeSlicers['Board'] = ['GTPT106'];
-                } else if (query.includes('gtpt118')) {
-                    state.activeSlicers['Board'] = ['GTPT118'];
-                } else if (query.includes('tpr129')) {
-                    state.activeSlicers['Board'] = ['TPR129_GTPT'];
-                } else {
-                    // Search across Board or DUT values
-                    state.activeSlicers['Board'] = [query.toUpperCase()];
-                }
+        if (!chatDrawer) return;
 
-                if (state.activeDashboardId) {
-                    loadDashboard(state.activeDashboardId);
-                }
+        window.openDataChatWithPrompt = function(promptText) {
+            chatDrawer.classList.add('open');
+            updateChatDatasetBadge();
+            if (promptText) {
+                sendChatMessage(promptText);
             }
+        };
+
+        // Toggle Drawer
+        if (chatFab) {
+            chatFab.addEventListener('click', () => {
+                chatDrawer.classList.toggle('open');
+                updateChatDatasetBadge();
+            });
+        }
+
+        if (closeChatDrawer) {
+            closeChatDrawer.addEventListener('click', () => {
+                chatDrawer.classList.remove('open');
+            });
+        }
+
+        if (chatSelect) {
+            chatSelect.addEventListener('change', (e) => {
+                const selectedId = parseInt(e.target.value);
+                if (selectedId) {
+                    setDataset(selectedId);
+                    updateChatDatasetBadge();
+                }
+            });
+        }
+
+        // Direct File Upload in Chat Drawer
+        if (chatUploadBtn && chatDirectFileInput) {
+            chatUploadBtn.addEventListener('click', () => chatDirectFileInput.click());
+            chatDirectFileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append('name', file.name.replace(/\.[^/.]+$/, ""));
+                formData.append('file', file);
+
+                appendChatMessage('assistant', `<i class="fa-solid fa-spinner fa-spin text-accent"></i> Uploading <strong>${escapeHtml(file.name)}</strong>...`);
+
+                try {
+                    const response = await fetch('/api/datasets/', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const resData = await response.json();
+                    if (response.ok && resData.dataset) {
+                        await fetchDatasets();
+                        setDataset(resData.dataset.id);
+                        if (chatSelect) chatSelect.value = resData.dataset.id;
+                        updateChatDatasetBadge();
+                        sendChatMessage('Summarize this dataset');
+                    } else {
+                        appendChatMessage('assistant', `⚠️ Failed to upload file: ${resData.error || 'Unknown error'}`);
+                    }
+                } catch (err) {
+                    appendChatMessage('assistant', `⚠️ Upload error: ${err.message}`);
+                }
+                chatDirectFileInput.value = '';
+            });
+        }
+
+        // Send Buttons & Enter Key
+        if (chatSendBtn && chatInput) {
+            chatSendBtn.addEventListener('click', () => sendChatMessage());
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+        }
+
+        // Event delegation for Quick Prompt Chips
+        if (chatMessages) {
+            chatMessages.addEventListener('click', (e) => {
+                const chip = e.target.closest('.quick-prompt-chip');
+                if (chip && chip.dataset.prompt) {
+                    sendChatMessage(chip.dataset.prompt);
+                }
+            });
+        }
+
+        function updateChatDatasetBadge() {
+            const currentDs = state.datasets.find(d => d.id === (state.activeDatasetId || (chatSelect ? parseInt(chatSelect.value) : null)));
+            if (chatActiveDsName) {
+                chatActiveDsName.textContent = currentDs ? `${currentDs.name} (${currentDs.row_count} rows)` : 'Select Dataset';
+            }
+            if (chatSelect && state.activeDatasetId) {
+                chatSelect.value = state.activeDatasetId;
+            }
+        }
+
+        function sendChatMessage(overrideText) {
+            const queryText = overrideText || (chatInput ? chatInput.value.trim() : '');
+            if (!queryText) return;
+
+            if (chatInput) chatInput.value = '';
+
+            const dsId = state.activeDatasetId || (chatSelect ? parseInt(chatSelect.value) : null);
+            if (!dsId) {
+                appendChatMessage('assistant', '⚠️ Please select or upload a dataset first to start chatting.');
+                return;
+            }
+
+            appendChatMessage('user', queryText);
+
+            const typingId = 'typing-' + Date.now();
+            const typingHtml = `<div class="chat-msg-row assistant-msg" id="${typingId}">
+                <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div class="chat-msg-bubble"><i class="fa-solid fa-spinner fa-spin text-accent"></i> Analyzing dataset...</div>
+            </div>`;
+            chatMessages.insertAdjacentHTML('beforeend', typingHtml);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            fetch(`/api/datasets/${dsId}/chat/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: queryText })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById(typingId)?.remove();
+                if (data.status === 'success' && data.data) {
+                    renderChatResponse(data.data);
+                } else {
+                    appendChatMessage('assistant', `⚠️ ${data.error || 'Failed to process chat query.'}`);
+                }
+            })
+            .catch(err => {
+                document.getElementById(typingId)?.remove();
+                appendChatMessage('assistant', `⚠️ Request error: ${err.message}`);
+            });
+        }
+
+        function appendChatMessage(role, content, isRawHtml = false) {
+            if (!chatMessages) return;
+            const isUser = role === 'user';
+            const avatarIcon = isUser ? 'fa-user' : 'fa-robot';
+            const formattedContent = isRawHtml ? content : escapeHtml(content);
+
+            const msgHtml = `
+                <div class="chat-msg-row ${isUser ? 'user-msg' : 'assistant-msg'}">
+                    <div class="chat-avatar"><i class="fa-solid ${avatarIcon}"></i></div>
+                    <div class="chat-msg-bubble">${formattedContent}</div>
+                </div>`;
+            chatMessages.insertAdjacentHTML('beforeend', msgHtml);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function renderChatResponse(res) {
+            let bubbleHtml = `<div class="chat-response-text">${formatMarkdown(res.response)}</div>`;
+
+            if (res.kpis && res.kpis.length > 0) {
+                bubbleHtml += `<div class="chat-kpis-grid">`;
+                res.kpis.forEach(k => {
+                    bubbleHtml += `<div class="chat-kpi-card">
+                        <div class="kpi-lbl">${escapeHtml(k.label)}</div>
+                        <div class="kpi-val">${escapeHtml(String(k.value))}</div>
+                    </div>`;
+                });
+                bubbleHtml += `</div>`;
+            }
+
+            if (res.table && res.table.headers && res.table.rows && res.table.rows.length > 0) {
+                bubbleHtml += `<div class="chat-table-wrapper"><table class="chat-table"><thead><tr>`;
+                res.table.headers.forEach(h => {
+                    bubbleHtml += `<th>${escapeHtml(h)}</th>`;
+                });
+                bubbleHtml += `</tr></thead><tbody>`;
+                res.table.rows.forEach(r => {
+                    bubbleHtml += `<tr>`;
+                    res.table.headers.forEach(h => {
+                        bubbleHtml += `<td>${escapeHtml(String(r[h] !== undefined ? r[h] : ''))}</td>`;
+                    });
+                    bubbleHtml += `</tr>`;
+                });
+                bubbleHtml += `</tbody></table></div>`;
+            }
+
+            if (res.suggested_prompts && res.suggested_prompts.length > 0) {
+                bubbleHtml += `<div class="chat-quick-prompts-container">`;
+                res.suggested_prompts.forEach(p => {
+                    bubbleHtml += `<button class="quick-prompt-chip" data-prompt="${escapeHtml(p)}"><i class="fa-solid fa-lightbulb text-warning"></i> ${escapeHtml(p)}</button>`;
+                });
+                bubbleHtml += `</div>`;
+            }
+
+            appendChatMessage('assistant', bubbleHtml, true);
+        }
+
+        function formatMarkdown(str) {
+            if (!str) return '';
+            return escapeHtml(str)
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Connect Top Ribbon Search Bar ("Ask Telemetry AI") to Data Chat
+        const aiQaInput = document.getElementById('input-ai-qa');
+        if (aiQaInput) {
+            aiQaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const q = aiQaInput.value.trim();
+                    if (!q) return;
+                    chatDrawer.classList.add('open');
+                    updateChatDatasetBadge();
+                    sendChatMessage(q);
+                }
+            });
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    // ENTERPRISE ADVANCED FEATURES: AI Auto-DB, Anomalies, Wrangler, Joiner
+    // --------------------------------------------------------------------------
+    async function triggerAutoBuildDashboard() {
+        if (!state.activeDatasetId) {
+            alert("Please select a dataset first to auto-build an AI dashboard.");
+            return;
+        }
+
+        const rAutoDb = document.getElementById('ribbon-btn-autodb');
+        const origText = rAutoDb ? rAutoDb.innerHTML : '';
+        if (rAutoDb) rAutoDb.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-warning"></i> Building AI Studio...';
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/auto-dashboard/`, { method: 'POST' });
+            const data = await res.json();
+            if (data.dashboard_id) {
+                await fetchDashboards();
+                loadDashboard(data.dashboard_id);
+                switchView('report');
+                alert(`🎉 AI Dashboard "${data.title}" generated successfully!`);
+            } else {
+                alert(`⚠️ ${data.error || 'Failed to auto-generate dashboard.'}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error auto-building dashboard: ${err.message}`);
+        } finally {
+            if (rAutoDb) rAutoDb.innerHTML = origText;
+        }
+    }
+
+    async function handleCleanDataset(e) {
+        e.preventDefault();
+        if (!state.activeDatasetId) return;
+
+        const fillMethod = document.getElementById('clean-null-select')?.value;
+        const removeDuplicates = document.getElementById('clean-dup-check')?.checked;
+        const dropNulls = document.getElementById('clean-dropnull-check')?.checked;
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/clean/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fill_method: fillMethod, remove_duplicates: removeDuplicates, drop_nulls: dropNulls })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal(document.getElementById('modal-clean-data'));
+                await fetchDatasets();
+                setDataset(state.activeDatasetId);
+                alert(`✨ Data Cleaning Completed! ${data.message}`);
+            } else {
+                alert(`⚠️ Cleaning Error: ${data.error}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error cleaning dataset: ${err.message}`);
+        }
+    }
+
+    async function handleAddMeasure(e) {
+        e.preventDefault();
+        if (!state.activeDatasetId) return;
+
+        const name = document.getElementById('measure-name-input')?.value;
+        const formula = document.getElementById('measure-formula-input')?.value;
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/measures/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, formula: formula })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal(document.getElementById('modal-add-measure'));
+                document.getElementById('add-measure-form')?.reset();
+                await fetchDatasets();
+                setDataset(state.activeDatasetId);
+                alert(`➕ Calculated measure '${data.name}' added successfully!`);
+            } else {
+                alert(`⚠️ Measure Error: ${data.error}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error adding measure: ${err.message}`);
+        }
+    }
+
+    function populateJoinDatasetsModal() {
+        const ds1Select = document.getElementById('join-ds1-select');
+        const ds2Select = document.getElementById('join-ds2-select');
+        if (!ds1Select || !ds2Select) return;
+
+        let optionsHtml = '';
+        state.datasets.forEach(ds => {
+            optionsHtml += `<option value="${ds.id}">${ds.name} (${ds.row_count} rows)</option>`;
         });
+        ds1Select.innerHTML = optionsHtml;
+        ds2Select.innerHTML = optionsHtml;
+        if (state.activeDatasetId) {
+            ds1Select.value = state.activeDatasetId;
+        }
+    }
+
+    async function handleJoinDatasets(e) {
+        e.preventDefault();
+        const name = document.getElementById('join-name-input')?.value;
+        const ds1Id = document.getElementById('join-ds1-select')?.value;
+        const ds2Id = document.getElementById('join-ds2-select')?.value;
+        const key1 = document.getElementById('join-key1-input')?.value;
+        const key2 = document.getElementById('join-key2-input')?.value;
+        const joinType = document.getElementById('join-type-select')?.value;
+
+        try {
+            const res = await fetch('/api/datasets/join/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    dataset1_id: ds1Id,
+                    dataset2_id: ds2Id,
+                    key_col1: key1,
+                    key_col2: key2,
+                    join_type: joinType
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.dataset) {
+                closeModal(document.getElementById('modal-join-datasets'));
+                document.getElementById('join-datasets-form')?.reset();
+                await fetchDatasets();
+                setDataset(data.dataset.id);
+                alert(`🔗 Datasets merged successfully! Created '${data.dataset.name}' (${data.dataset.row_count} rows).`);
+            } else {
+                alert(`⚠️ Dataset Merge Error: ${data.error}`);
+            }
+        } catch (err) {
+            alert(`⚠️ Error merging datasets: ${err.message}`);
+        }
+    }
+
+    function toggleKioskMode() {
+        state.isKiosk = !state.isKiosk;
+        if (state.isKiosk) {
+            document.body.requestFullscreen?.().catch(() => {});
+            document.body.classList.add('kiosk-mode');
+            alert("📺 Executive Kiosk Presentation Mode Activated! Press ESC to exit.");
+        } else {
+            document.exitFullscreen?.().catch(() => {});
+            document.body.classList.remove('kiosk-mode');
+        }
     }
 });
+
+

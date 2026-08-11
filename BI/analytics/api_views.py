@@ -14,6 +14,7 @@ from .models import Dataset, Dashboard, Widget, CalculatedMeasure, DatasetColumn
 from .serializers import DatasetSerializer, DashboardSerializer, WidgetSerializer, UserSerializer
 from .permissions import IsOwnerOrReadOnly, IsAdminOrReadOnly
 from .services import DatasetEngine
+from .chat_engine import DataChatEngine
 
 # DRF ViewSets
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -257,7 +258,14 @@ def datasets_list_api(request):
         if not name or not file_obj:
             return JsonResponse({'error': 'Name and file are required.'}, status=400)
 
-        file_type = 'csv' if file_obj.name.endswith('.csv') else 'excel'
+        fname = file_obj.name.lower()
+        if fname.endswith('.json'):
+            file_type = 'json'
+        elif fname.endswith(('.xlsx', '.xls')):
+            file_type = 'excel'
+        else:
+            file_type = 'csv'
+
         dataset = Dataset.objects.create(
             name=name,
             file=file_obj,
@@ -293,6 +301,25 @@ def dataset_detail_api(request, dataset_id):
         'file_type': dataset.file_type,
         'column_schema': dataset.column_schema
     })
+
+@csrf_exempt
+def dataset_chat_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        query = payload.get('message', '').strip()
+        result = DataChatEngine.process_query(dataset, query)
+        return JsonResponse({
+            'dataset_id': dataset.id,
+            'dataset_name': dataset.name,
+            'status': 'success',
+            'data': result
+        })
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to process chat query: {str(e)}"}, status=400)
 
 @csrf_exempt
 def dataset_filter_values_api(request, dataset_id):
@@ -564,3 +591,141 @@ def api_docs_api(request):
         }
     }
     return JsonResponse(openapi_spec)
+
+@csrf_exempt
+def auto_dashboard_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        from .analytics_advanced import AIAutoBuilder
+        user = request.user if request.user.is_authenticated else None
+        dashboard = AIAutoBuilder.build_auto_dashboard(dataset, user=user)
+        return JsonResponse({
+            'message': 'AI Auto-Dashboard generated successfully!',
+            'dashboard_id': dashboard.id,
+            'title': dashboard.title
+        })
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to build auto-dashboard: {str(e)}"}, status=400)
+
+@csrf_exempt
+def add_chart_from_chat_api(request, dashboard_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    try:
+        payload = json.loads(request.body)
+        from .analytics_advanced import AIAutoBuilder
+        user = request.user if request.user.is_authenticated else None
+        widget = AIAutoBuilder.create_widget_from_chat(
+            dashboard=dashboard,
+            title=payload.get('title', 'AI Generated Visual'),
+            visual_type=payload.get('visual_type', 'bar'),
+            x_axis=payload.get('x_axis'),
+            y_axis=payload.get('y_axis'),
+            aggregation=payload.get('aggregation', 'AVG'),
+            group_by=payload.get('group_by'),
+            user=user
+        )
+        return JsonResponse({'message': 'Visual added to canvas successfully!', 'widget_id': widget.id})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def dataset_anomalies_api(request, dataset_id):
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        from .analytics_advanced import AnomalyEngine
+        anomalies_data = AnomalyEngine.detect_anomalies(dataset)
+        return JsonResponse({'status': 'success', 'data': anomalies_data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def clean_dataset_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        fill_method = payload.get('fill_method')
+        remove_duplicates = payload.get('remove_duplicates', False)
+        drop_nulls = payload.get('drop_nulls', False)
+        from .analytics_advanced import DataWrangler
+        ds = DataWrangler.clean_dataset(dataset, fill_method, remove_duplicates, drop_nulls)
+        return JsonResponse({'message': 'Dataset cleaned successfully!', 'row_count': ds.row_count})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def add_measure_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        name = payload.get('name')
+        formula = payload.get('formula')
+        if not name or not formula:
+            return JsonResponse({'error': 'Name and formula are required.'}, status=400)
+        from .analytics_advanced import DataWrangler
+        measure_name = DataWrangler.add_calculated_measure(dataset, name, formula)
+        return JsonResponse({'message': f"Calculated measure '{measure_name}' created successfully!", 'name': measure_name})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def join_datasets_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    try:
+        payload = json.loads(request.body)
+        dataset1_id = payload.get('dataset1_id')
+        dataset2_id = payload.get('dataset2_id')
+        key_col1 = payload.get('key_col1')
+        key_col2 = payload.get('key_col2')
+        join_type = payload.get('join_type', 'inner')
+        name = payload.get('name')
+
+        ds1 = get_object_or_404(Dataset, pk=dataset1_id)
+        ds2 = get_object_or_404(Dataset, pk=dataset2_id)
+
+        from .analytics_advanced import DatasetJoiner
+        new_ds = DatasetJoiner.join_datasets(ds1, ds2, key_col1, key_col2, join_type, name)
+        return JsonResponse({
+            'message': f"Datasets merged successfully!",
+            'dataset': {
+                'id': new_ds.id,
+                'name': new_ds.name,
+                'row_count': new_ds.row_count
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dashboard_export_template_api(request, dashboard_id):
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    from .analytics_advanced import TemplateManager
+    template_json = TemplateManager.export_template(dashboard)
+    response = JsonResponse(template_json)
+    response['Content-Disposition'] = f'attachment; filename="Dashboard_{dashboard.id}_Template.json"'
+    return response
+
+@csrf_exempt
+def dashboard_import_template_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    try:
+        payload = json.loads(request.body)
+        dataset_id = payload.get('dataset_id')
+        template_json = payload.get('template')
+        title = payload.get('title')
+
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        user = request.user if request.user.is_authenticated else None
+        from .analytics_advanced import TemplateManager
+        db = TemplateManager.import_template(dataset, template_json, title, user)
+        return JsonResponse({'message': 'Dashboard imported from template successfully!', 'dashboard_id': db.id})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
