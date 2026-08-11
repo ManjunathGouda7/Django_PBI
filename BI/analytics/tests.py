@@ -186,6 +186,13 @@ class EnterpriseAdvancedTests(TestCase):
         chunks = list(DatasetEngine.load_dataframe_chunks(self.dataset, chunksize=2))
         self.assertTrue(len(chunks) >= 1)
 
+    def test_formula_security_sanitizer(self):
+        from .analytics_advanced import DataWrangler
+        self.assertTrue(DataWrangler.validate_formula_security("Power * 1.15", ["Power", "PFO_mW"]))
+        with self.assertRaises(ValueError):
+            DataWrangler.validate_formula_security("__import__('os').system('ls')", ["Power"])
+
+
 
 
 
