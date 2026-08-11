@@ -105,7 +105,6 @@ class DatasetEngine:
             df = pd.read_json(filepath)
             if '_id' in df.columns:
                 df = df.drop(columns=['_id'])
-            return df.copy()
         elif dataset.file_type == 'csv' or filepath.endswith('.csv'):
             df = pd.read_csv(filepath)
         elif dataset.file_type == 'excel' or filepath.endswith(('.xlsx', '.xls')):
@@ -113,7 +112,19 @@ class DatasetEngine:
         else:
             df = pd.read_csv(filepath)
 
+        _df_cache[cache_key] = df
         return df.copy()
+
+def clear_dataset_cache(dataset_id=None):
+    """
+    Clears in-memory DataFrame cache for dataset updates.
+    """
+    global _df_cache
+    if dataset_id:
+        _df_cache.pop(dataset_id, None)
+    else:
+        _df_cache.clear()
+
 
     @staticmethod
     def get_mongodb_collections(connection_url="mongodb://192.168.100.123:27017", db_name="GRL"):
