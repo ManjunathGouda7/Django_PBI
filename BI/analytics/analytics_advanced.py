@@ -247,6 +247,37 @@ class DataWrangler:
         return dataset
 
     @staticmethod
+    def validate_formula_security(formula, df_columns):
+
+        """
+        🔒 Formula Expression Sanitizer & Security Hardener.
+        Parses expression using AST to verify it contains only safe arithmetic nodes
+        (BinOp, UnaryOp, Num/Constant, Name) matching valid dataset column names.
+        """
+        import ast
+
+        if '__' in formula or 'import' in formula or 'os.' in formula or 'sys.' in formula or 'eval' in formula or 'exec' in formula:
+            raise ValueError("Formula contains forbidden keywords or tokens.")
+
+        try:
+            tree = ast.parse(formula, mode='eval')
+        except Exception as e:
+            raise ValueError(f"Invalid mathematical expression syntax: {str(e)}")
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Name, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow, ast.USub, ast.UAdd, ast.Load)):
+
+                if isinstance(node, ast.Name):
+                    if node.id not in df_columns and node.id not in ('True', 'False'):
+                        col_matches = [c for c in df_columns if c.lower() == node.id.lower()]
+                        if not col_matches:
+                            raise ValueError(f"Column '{node.id}' not found in dataset schema.")
+            else:
+                raise ValueError(f"Forbidden syntax token '{type(node).__name__}' in formula.")
+
+        return True
+
+    @staticmethod
     def add_calculated_measure(dataset, name, formula):
         df = DatasetEngine.load_dataframe(dataset)
         if df.empty:
@@ -255,9 +286,10 @@ class DataWrangler:
         clean_name = str(name).strip().replace(' ', '_')
         clean_formula = formula.strip()
 
-        # Support basic arithmetic expressions: e.g. colA * 1000 or colA / colB
+        # Perform AST security & syntax validation
+        DataWrangler.validate_formula_security(clean_formula, list(df.columns))
+
         try:
-            # Safely evaluate Pandas expression using df.eval()
             df[clean_name] = df.eval(clean_formula)
         except Exception as eval_err:
             raise ValueError(f"Failed to calculate measure formula '{formula}': {str(eval_err)}")
@@ -283,6 +315,7 @@ class DataWrangler:
         _df_cache[dataset.id] = df.copy()
 
         return clean_name
+
 
 
 class DatasetJoiner:
