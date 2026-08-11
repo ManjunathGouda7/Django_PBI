@@ -13,6 +13,7 @@ urlpatterns = [
     path('export/<int:dashboard_id>/', views.export_dashboard_view, name='export_dashboard'),
     path('export-csv/<int:dataset_id>/', views.export_csv_view, name='export_csv'),
     path('export-excel/<int:dataset_id>/', views.export_excel_view, name='export_excel'),
+    path('export-pdf/<int:dashboard_id>/', views.export_executive_pdf_view, name='export_executive_pdf'),
 
     # Authentication APIs
     path('api/auth/register/', api_views.auth_register_api, name='api_auth_register'),
@@ -33,7 +34,11 @@ urlpatterns = [
     path('api/datasets/<int:dataset_id>/anomalies/', api_views.dataset_anomalies_api, name='api_dataset_anomalies'),
     path('api/datasets/<int:dataset_id>/clean/', api_views.clean_dataset_api, name='api_clean_dataset'),
     path('api/datasets/<int:dataset_id>/measures/', api_views.add_measure_api, name='api_add_measure'),
+    path('api/datasets/<int:dataset_id>/forecast/', api_views.dataset_forecast_api, name='api_dataset_forecast'),
+    path('api/datasets/<int:dataset_id>/nl-formula/', api_views.nl_formula_api, name='api_nl_formula'),
+    path('api/datasets/<int:dataset_id>/schedule-etl/', api_views.schedule_etl_api, name='api_schedule_etl'),
     path('api/datasets/join/', api_views.join_datasets_api, name='api_join_datasets'),
+
 
     path('api/dashboards/', api_views.dashboards_api, name='api_dashboards_list'),
     path('api/dashboards/<int:dashboard_id>/', api_views.dashboard_detail_api, name='api_dashboard_detail'),

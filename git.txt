@@ -94,6 +94,23 @@ Step 6: Switch between branches in the future
     - "Kiosk Mode" ribbon button.
     - Toggles borderless TV slideshow mode for boardroom monitors.
 
+[x] 🔮 AI Predictive Time-Series Forecasting Engine:
+    - Automatically predicts future telemetry metrics (7 to 30 days out) using trend polynomial regression.
+    - Generates 95% confidence bounds (upper and lower variance thresholds) and renders forecast line charts.
+
+[x] 🧬 AI Natural Language DAX / Formula Generator:
+    - "AI Formula Helper" in Add Measure modal.
+    - Translates plain English requests (e.g., "Calculate percentage ratio of PFO to Rectified Power")
+      into exact Pandas/DAX mathematical expressions.
+
+[x] 📑 Multi-Page Executive PDF Report Engine:
+    - "Executive PDF" ribbon button (/export-pdf/<dashboard_id>/).
+    - Renders high-resolution print-ready executive PDF report with KPI summaries, header banners, and multi-visual cards.
+
+[x] 🔄 Automated ETL Background Refresh Pipeline:
+    - Scheduled background data sync engine (/api/datasets/<id>/schedule-etl/) updating telemetry records and schema metadata.
+
+
 [x] Django REST Framework & Swagger Documentation:
     - DRF ViewSets (/api/datasets/, /api/dashboards/, /api/widgets/)
     - JWT & Token authentication endpoints (/api/token/, /api/token/refresh/)

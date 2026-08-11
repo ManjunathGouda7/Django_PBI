@@ -78,7 +78,9 @@
         <div class="ribbon-tab" id="ribbon-btn-excel"><i class="fa-solid fa-file-excel text-success"></i> Export Excel</div>
         <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-primary"></i> Export CSV</div>
         <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> Export PDF</div>
+        <div class="ribbon-tab" id="ribbon-btn-exec-pdf"><i class="fa-solid fa-file-invoice text-danger"></i> Executive PDF</div>
         <div class="ribbon-tab" id="ribbon-btn-kiosk"><i class="fa-solid fa-tv text-accent"></i> Kiosk Mode</div>
+
         <div class="ribbon-qa-box"
             style="display:flex; align-items:center; gap:0.4rem; margin-left:1rem; flex:1; max-width:280px;">
             <div style="position:relative; width:100%;">
@@ -224,14 +226,17 @@
                     <!-- Action Button -->
                     <div class="viz-actions">
                         <button class="btn btn-primary btn-block" id="btn-save-widget">
-                            <i class="fa-solid fa-chart-line"></i> <span id="lbl-save-widget">Add Visual to
-                                Canvas</span>
+                            <i class="fa-solid fa-chart-line"></i> <span id="lbl-save-widget">Add Visual to Canvas</span>
+                        </button>
+                        <button class="btn btn-warning btn-block" id="btn-trigger-forecast" style="margin-top: 8px;">
+                            <i class="fa-solid fa-crystal-ball"></i> 🔮 AI Time-Series Forecast
                         </button>
                         <button class="btn btn-danger btn-block" id="btn-delete-widget"
                             style="display:none; margin-top: 8px;">
                             <i class="fa-solid fa-trash"></i> Delete Selected Visual
                         </button>
                     </div>
+
                 </div><!-- End Panel: Visualizations -->
 
                 <!-- Panel: Filters on this page -->
@@ -645,6 +650,13 @@
             <button class="modal-close" id="close-modal-measure">&times;</button>
         </div>
         <div class="modal-body">
+            <div class="form-group" style="background:rgba(0,164,239,0.08); border:1px solid rgba(0,164,239,0.25); border-radius:var(--radius-sm); padding:0.6rem; margin-bottom:0.8rem;">
+                <label style="color:#38bdf8; font-weight:600;"><i class="fa-solid fa-wand-magic-sparkles text-accent"></i> 🧬 AI Natural Language Formula Helper</label>
+                <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
+                    <input type="text" id="nl-formula-prompt" class="pbi-input" placeholder="e.g. 'Calculate percentage ratio of PFO to Rectified Power'" style="font-size:0.75rem;">
+                    <button type="button" class="btn btn-sm btn-accent" id="btn-nl-formula-gen" style="white-space:nowrap;"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
+                </div>
+            </div>
             <form id="add-measure-form">
                 <div class="form-group">
                     <label>Measure Field Name</label>
@@ -660,6 +672,7 @@
                 </button>
             </form>
         </div>
+
     </div>
 </div>
 {% endblock %}

@@ -146,4 +146,40 @@ class EnterpriseAdvancedTests(TestCase):
         self.assertEqual(imported_db.title, "Imported Test")
         self.assertEqual(imported_db.widgets.count(), db.widgets.count())
 
+    def test_time_series_forecasting(self):
+        url = reverse('analytics:api_dataset_forecast', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('forecast', data['data'])
+
+    def test_nl_formula_generator(self):
+        url = reverse('analytics:api_nl_formula', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.post(
+            url,
+            data='{"prompt": "Calculate percentage ratio of PFO to Power"}',
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('formula', data['data'])
+
+    def test_etl_sync_pipeline(self):
+        url = reverse('analytics:api_schedule_etl', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['data']['status'], 'SUCCESS')
+
+    def test_executive_pdf_export_view(self):
+        db = Dashboard.objects.create(title="PDF Test DB", dataset=self.dataset, created_by=self.user)
+        url = reverse('analytics:export_executive_pdf', kwargs={'dashboard_id': db.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Executive Telemetry Report", response.content)
+
+
 

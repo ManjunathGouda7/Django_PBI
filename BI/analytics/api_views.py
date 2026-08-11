@@ -729,3 +729,42 @@ def dashboard_import_template_api(request):
         return JsonResponse({'message': 'Dashboard imported from template successfully!', 'dashboard_id': db.id})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+def dataset_forecast_api(request, dataset_id):
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    metric_col = request.GET.get('metric')
+    periods = int(request.GET.get('periods', 7))
+    try:
+        from .analytics_advanced import ForecastingEngine
+        forecast_data = ForecastingEngine.generate_forecast(dataset, metric_col, periods)
+        return JsonResponse({'status': 'success', 'data': forecast_data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def nl_formula_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        prompt = payload.get('prompt', '')
+        if not prompt:
+            return JsonResponse({'error': 'Prompt is required.'}, status=400)
+        from .analytics_advanced import NLToFormulaEngine
+        result = NLToFormulaEngine.generate_formula_from_nl(dataset, prompt)
+        return JsonResponse({'status': 'success', 'data': result})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def schedule_etl_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        from .analytics_advanced import ETLPipeline
+        etl_result = ETLPipeline.run_etl_sync(dataset)
+        return JsonResponse({'status': 'success', 'data': etl_result})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

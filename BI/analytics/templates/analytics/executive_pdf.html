@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Executive Report — {{ dashboard.title }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00A4EF;
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #ffffff !important; color: #000000 !important; }
+            .pdf-card { background: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important; page-break-inside: avoid; }
+            .kpi-box { background: #e2e8f0 !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important; }
+            .header-banner { background: #002060 !important; color: #ffffff !important; }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--dark-bg); color: var(--text-main); padding: 2rem; }
+        .no-print-bar { display: flex; align-items: center; justify-content: space-between; background: rgba(30, 41, 59, 0.9); padding: 1rem 2rem; border-radius: 8px; margin-bottom: 2rem; border: 1px solid var(--border); }
+        .btn-print { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
+        .header-banner { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--primary); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+        .brand-title { font-size: 1.6rem; font-weight: 800; color: var(--primary); }
+        .report-meta { font-size: 0.82rem; color: var(--text-muted); text-align: right; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .kpi-box { background: var(--card-bg); border: 1px solid var(--border); padding: 1.2rem; border-radius: 8px; text-align: center; }
+        .kpi-val { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin-top: 0.3rem; }
+        .kpi-lbl { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+        .pdf-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.2rem; }
+        .pdf-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+        .pdf-card-title { font-size: 1rem; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--primary); }
+    </style>
+</head>
+<body>
+    <div class="no-print-bar no-print">
+        <div>
+            <h3 style="font-size:1.1rem; color:var(--text-main);"><i class="fa-solid fa-file-pdf text-danger"></i> Executive PDF Report Preview</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted);">Ready for boardroom presentation & printing.</p>
+        </div>
+        <button class="btn-print" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Download PDF</button>
+    </div>
+
+    <div class="header-banner">
+        <div>
+            <div class="brand-title"><i class="fa-solid fa-chart-pie"></i> Apex BI Studio — Executive Telemetry Report</div>
+            <h2 style="font-size:1.3rem; margin-top:0.3rem;">{{ dashboard.title }}</h2>
+        </div>
+        <div class="report-meta">
+            <div><strong>Dataset:</strong> {{ dataset.name }}</div>
+            <div><strong>Total Records:</strong> {{ dataset.row_count }}</div>
+            <div><strong>Generated:</strong> {% now "F j, Y — H:i T" %}</div>
+        </div>
+    </div>
+
+    <!-- Executive KPI Summary Cards -->
+    <div class="kpi-grid">
+        {% for kpi in kpi_summaries %}
+        <div class="kpi-box">
+            <div class="kpi-lbl">{{ kpi.label }}</div>
+            <div class="kpi-val">{{ kpi.value }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Multi-Widget PDF Canvas Layout -->
+    <div class="pdf-grid">
+        {% for w in widgets %}
+        <div class="pdf-card" style="grid-column: span {{ w.width }};">
+            <div class="pdf-card-title"><i class="fa-solid fa-chart-column"></i> {{ w.title }}</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
+                <p><strong>Visual Type:</strong> {{ w.visual_type|title }}</p>
+                <p><strong>Primary Metric (Y-Axis):</strong> {{ w.y_axis|default:"N/A" }}</p>
+                <p><strong>Category Field (X-Axis):</strong> {{ w.x_axis|default:"N/A" }}</p>
+                {% if w.group_by %}<p><strong>Legend Grouping:</strong> {{ w.group_by }}</p>{% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="pdf-card" style="grid-column: span 12; text-align:center; padding:3rem; color:var(--text-muted);">
+            No visuals attached to this dashboard.
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
