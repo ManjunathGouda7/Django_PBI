@@ -1358,16 +1358,24 @@ document.addEventListener('DOMContentLoaded', () => {
             headHtml += '</tr>';
             elements.dvTableHead.innerHTML = headHtml;
 
-            // Render Table Body
-            let bodyHtml = '';
+            // Render Table Body via DocumentFragment for single DOM pass
+            const fragment = document.createDocumentFragment();
             (data.rows || []).forEach(row => {
-                bodyHtml += '<tr>';
+                const tr = document.createElement('tr');
                 Object.values(row).forEach(val => {
-                    bodyHtml += `<td>${val}</td>`;
+                    const td = document.createElement('td');
+                    td.textContent = val !== null && val !== undefined ? String(val) : '';
+                    tr.appendChild(td);
                 });
-                bodyHtml += '</tr>';
+                fragment.appendChild(tr);
             });
-            elements.dvTableBody.innerHTML = bodyHtml || '<tr><td colspan="100">No matching records found.</td></tr>';
+            elements.dvTableBody.innerHTML = '';
+            if ((data.rows || []).length > 0) {
+                elements.dvTableBody.appendChild(fragment);
+            } else {
+                elements.dvTableBody.innerHTML = '<tr><td colspan="100">No matching records found.</td></tr>';
+            }
+
 
         } catch (err) {
             console.error("Failed to load data view rows", err);

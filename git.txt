@@ -110,6 +110,12 @@ Step 6: Switch between branches in the future
 [x] 🔄 Automated ETL Background Refresh Pipeline:
     - Scheduled background data sync engine (/api/datasets/<id>/schedule-etl/) updating telemetry records and schema metadata.
 
+[x] ⚡ Multi-Tier High-Performance In-Memory Caching Architecture:
+    - Tier 1: In-memory DataFrame cache (_df_cache) storing loaded CSV, JSON, Excel, and MongoDB dataframes.
+    - Tier 2: Dynamic cache invalidation (clear_dataset_cache) when datasets undergo cleaning, measure additions, or updates.
+    - Zero-latency dataset slice filtering and instant chart aggregation rendering.
+
+
 
 [x] Django REST Framework & Swagger Documentation:
     - DRF ViewSets (/api/datasets/, /api/dashboards/, /api/widgets/)
