@@ -540,24 +540,25 @@ class ForecastingEngine:
         if len(series) < 5:
             raise ValueError("Insufficient data points for forecasting (minimum 5 required).")
 
-        y = series.values
-        x = np.arange(len(y))
+        y = series.values.astype(np.float64)
+        x = np.arange(len(y), dtype=np.float64)
 
-        # Linear trend fit: y = m*x + c
+        # Vectorized linear trend fit: y = m*x + c
         slope, intercept = np.polyfit(x, y, 1)
         y_fit = slope * x + intercept
         residuals = y - y_fit
-        std_err = np.std(residuals) if len(residuals) > 1 else 1.0
+        std_err = float(np.std(residuals)) if len(residuals) > 1 else 1.0
 
-        future_x = np.arange(len(y), len(y) + periods)
+        future_x = np.arange(len(y), len(y) + periods, dtype=np.float64)
         future_y = slope * future_x + intercept
 
-        # 95% confidence interval bounds (1.96 * std_err)
+        # Vectorized 95% confidence interval bounds (1.96 * std_err)
         margin = 1.96 * std_err
         upper_bound = future_y + margin
-        lower_bound = np.maximum(0, future_y - margin)
+        lower_bound = np.maximum(0.0, future_y - margin)
 
         historical_labels = [f"P{i+1}" for i in range(len(y))]
+
         future_labels = [f"F+{i+1}" for i in range(periods)]
 
         return {
