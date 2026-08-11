@@ -160,19 +160,20 @@ class DatasetEngine:
 
 
 
-def clear_dataset_cache(dataset_id=None):
-    """
-    Clears in-memory DataFrame cache for dataset updates.
-    """
-    global _df_cache
-    if dataset_id:
-        _df_cache.pop(dataset_id, None)
-    else:
-        _df_cache.clear()
-
+    @staticmethod
+    def clear_cache(dataset_id=None):
+        """
+        Clears in-memory DataFrame cache for dataset updates.
+        """
+        global _df_cache
+        if dataset_id:
+            _df_cache.pop(dataset_id, None)
+        else:
+            _df_cache.clear()
 
     @staticmethod
     def get_mongodb_collections(connection_url="mongodb://192.168.100.123:27017", db_name="GRL"):
+
         import pymongo
         try:
             client = pymongo.MongoClient(connection_url, serverSelectionTimeoutMS=3000)
@@ -282,8 +283,15 @@ def clear_dataset_cache(dataset_id=None):
             }
 
         if visual_type == 'scatter':
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if not (x_col and x_col in df.columns):
+                x_col = numeric_cols[0] if numeric_cols else (df.columns[0] if not df.empty else None)
+            if not (y_col and y_col in df.columns):
+                y_col = numeric_cols[1] if len(numeric_cols) > 1 else (numeric_cols[0] if numeric_cols else (df.columns[-1] if not df.empty else None))
+
             if x_col and y_col and x_col in df.columns and y_col in df.columns:
                 try:
+
                     group_col = widget.group_by if (widget.group_by and widget.group_by in df.columns) else None
                     if not group_col:
                         for candidate in ['Board', 'PowerMode', 'Power', 'DUT', 'CRX', 'RUN']:
@@ -383,3 +391,5 @@ def clear_dataset_cache(dataset_id=None):
                 'labels': [],
                 'datasets': [{'label': 'Error', 'data': []}]
             }
+
+clear_dataset_cache = DatasetEngine.clear_cache
