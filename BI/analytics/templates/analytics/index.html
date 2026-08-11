@@ -133,30 +133,29 @@
             <div id="fields-tree-container" style="display:none;"></div>
 
             <!-- Center Report Canvas Grid -->
-            <section class="pbi-canvas-area">
+            <section class="pbi-canvas-area" style="flex:1; display:flex; flex-direction:column; padding:1rem; overflow-y:auto;">
 
-                <!-- Dynamic Slicers Filter Bar -->
-                <div class="slicers-bar" id="slicers-bar">
-                    <div class="slicers-label">
-                        <i class="fa-solid fa-filter text-accent"></i> Active Slicers:
+                <!-- Dynamic Slicers Filter Bar (Spans 100% Full Width across Top of Canvas) -->
+                <div class="slicers-bar" id="slicers-bar" style="width:100%; display:flex; align-items:center; justify-content:space-between; margin-bottom:0.8rem; background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.08); padding:0.6rem 1rem; border-radius:var(--radius-md);">
+                    <div style="display:flex; align-items:center; gap:0.6rem; flex:1;">
+                        <div class="slicers-label" style="font-weight:600; color:var(--primary); white-space:nowrap;">
+                            <i class="fa-solid fa-filter text-accent"></i> Active Slicers:
+                        </div>
+                        <div class="slicer-pills" id="slicer-pills-container" style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                            <span class="no-slicers-text" style="color:var(--text-muted); font-size:0.8rem;">No active filters (click chart elements to cross-filter)</span>
+                        </div>
                     </div>
-                    <div class="slicer-pills" id="slicer-pills-container">
-                        <span class="no-slicers-text">No active filters (click chart elements to cross-filter)</span>
-                    </div>
-                    <button class="btn btn-sm btn-outline btn-icon" id="btn-clear-slicers" title="Clear All Slicers">
+                    <button class="btn btn-sm btn-outline btn-icon" id="btn-clear-slicers" title="Clear All Slicers" style="white-space:nowrap;">
                         <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
                     </button>
                 </div>
 
-                </div>
-
-                <!-- Interactive Visual Canvas -->
-
-
-                <div class="pbi-canvas-grid" id="canvas-grid">
+                <!-- Interactive Visual Canvas (Spans 100% Full Width across Viewport) -->
+                <div class="pbi-canvas-grid" id="canvas-grid" style="width:100%; display:grid; grid-template-columns:repeat(12, 1fr); gap:1rem;">
                     <!-- Dynamic Visual Cards will be rendered here -->
                 </div>
             </section>
+
 
             <!-- Right Visualizations & Field Mapping Pane -->
             <aside class="pbi-viz-pane">
