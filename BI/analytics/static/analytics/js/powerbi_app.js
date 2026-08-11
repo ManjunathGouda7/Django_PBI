@@ -255,8 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
             loadDataViewRows();
         });
 
-        // Field search filter
-        elements.fieldSearchInput.addEventListener('input', (e) => filterFieldsList(e.target.value));
+        // Field search filter with 200ms debouncing
+        elements.fieldSearchInput.addEventListener('input', debounce((e) => filterFieldsList(e.target.value), 200));
+
 
         // Ribbon Navigation Tabs
         const rGetData = document.getElementById('ribbon-btn-getdata');
@@ -1114,12 +1115,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]
             },
             options: {
+                animation: (Object.keys(state.activeSlicers).length > 0 ? false : { duration: 250 }),
                 indexAxis: indexAxis,
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: (chartType === 'pie' || chartType === 'doughnut') }
                 },
+
                 onClick: (event, elementsArr) => {
                     if (elementsArr.length > 0) {
                         const index = elementsArr[0].index;
