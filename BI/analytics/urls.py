@@ -46,6 +46,18 @@ urlpatterns = [
     path('api/schedules/<int:schedule_id>/run/', api_views.run_scheduled_refresh_api, name='api_run_scheduled_refresh'),
     path('api/audit-logs/', api_views.audit_logs_api, name='api_audit_logs'),
 
+    # Enterprise Expansion APIs
+    path('api/widgets/<int:widget_id>/smart-narrative/', api_views.smart_narrative_api, name='api_smart_narrative'),
+    path('api/datasets/sql-connect/', api_views.sql_connect_api, name='api_sql_connect'),
+    path('api/datasets/rest-ingest/', api_views.rest_ingest_api, name='api_rest_ingest'),
+    path('api/datasets/<int:dataset_id>/what-if/', api_views.what_if_scenario_api, name='api_what_if_scenario'),
+    path('api/datasets/<int:dataset_id>/rfm-clustering/', api_views.rfm_clustering_api, name='api_rfm_clustering'),
+    path('api/widgets/<int:widget_id>/drill-through/', api_views.drill_through_api, name='api_drill_through'),
+    path('api/datasets/<int:dataset_id>/rls-rules/', api_views.rls_rules_api, name='api_rls_rules'),
+    path('api/datasets/<int:dataset_id>/dax-eval/', api_views.dax_eval_api, name='api_dax_eval'),
+    path('api/widgets/<int:widget_id>/alerts/', api_views.kpi_alerts_api, name='api_kpi_alerts'),
+    path('api/widgets/<int:widget_id>/comments/', api_views.widget_comments_api, name='api_widget_comments'),
+
     path('api/dashboards/', api_views.dashboards_api, name='api_dashboards_list'),
     path('api/dashboards/<int:dashboard_id>/', api_views.dashboard_detail_api, name='api_dashboard_detail'),
     path('api/dashboards/<int:dashboard_id>/widgets/', api_views.widgets_api, name='api_widgets_list'),

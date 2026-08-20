@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 from .models import (
     Organization, UserProfile, Dataset, Dashboard, Widget,
     CalculatedMeasure, DatasetColumn, DatasetTag, DatasetSharePermission,
-    DashboardShare, ScheduledRefresh, ActivityLog
+    DashboardShare, ScheduledRefresh, ActivityLog,
+    RowLevelSecurityRule, KPIAlertRule, WidgetComment
 )
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -60,10 +61,35 @@ class ScheduledRefreshSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'last_run', 'next_run']
 
+class RowLevelSecurityRuleSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True, default=None)
+
+    class Meta:
+        model = RowLevelSecurityRule
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+class KPIAlertRuleSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = KPIAlertRule
+        fields = '__all__'
+        read_only_fields = ['created_at', 'last_triggered']
+
+class WidgetCommentSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = WidgetComment
+        fields = '__all__'
+        read_only_fields = ['created_at', 'user']
+
 class DatasetSerializer(serializers.ModelSerializer):
     columns = DatasetColumnSerializer(many=True, read_only=True)
     share_permissions = DatasetSharePermissionSerializer(many=True, read_only=True)
     schedules = ScheduledRefreshSerializer(many=True, read_only=True)
+    rls_rules = RowLevelSecurityRuleSerializer(many=True, read_only=True)
     owner_username = serializers.SerializerMethodField()
 
     class Meta:
@@ -81,6 +107,9 @@ class DatasetSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class WidgetSerializer(serializers.ModelSerializer):
+    alerts = KPIAlertRuleSerializer(many=True, read_only=True)
+    comments = WidgetCommentSerializer(many=True, read_only=True)
+
     class Meta:
         model = Widget
         fields = '__all__'
@@ -118,4 +147,5 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         model = ActivityLog
         fields = '__all__'
         read_only_fields = ['timestamp']
+
 

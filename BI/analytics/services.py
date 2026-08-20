@@ -450,6 +450,249 @@ class DatasetValidator:
         df.columns = sanitized_cols
         return df
 
+class SmartNarrativeEngine:
+    @staticmethod
+    def generate_widget_narrative(df, widget):
+        bullets = []
+        if df.empty:
+            return ["Dataset is empty; no insights available."]
+
+        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+
+        x_col = widget.x_axis if widget.x_axis in df.columns else (cat_cols[0] if cat_cols else df.columns[0])
+        y_col = widget.y_axis if widget.y_axis in df.columns else (num_cols[0] if num_cols else df.columns[-1])
+
+        if y_col in df.columns and pd.api.types.is_numeric_dtype(df[y_col]):
+            total_val = float(df[y_col].sum())
+            avg_val = float(df[y_col].mean())
+            max_val = float(df[y_col].max())
+            min_val = float(df[y_col].min())
+
+            bullets.append(f"The total aggregated **{y_col}** across all recorded entries is **{total_val:,.2f}**, with an average of **{avg_val:,.2f}** per entry.")
+            bullets.append(f"Peak observed **{y_col}** value reached **{max_val:,.2f}**, while the lowest recorded point was **{min_val:,.2f}**.")
+
+            if x_col in df.columns:
+                grouped = df.groupby(x_col)[y_col].sum()
+                if not grouped.empty:
+                    top_cat = str(grouped.idxmax())
+                    top_val = float(grouped.max())
+                    pct_share = (top_val / total_val * 100) if total_val != 0 else 0
+                    bullets.append(f"**{top_cat}** represents the top contributor for **{x_col}**, generating **{top_val:,.2f}** ({pct_share:.1f}% share of total).")
+
+            # Outliers check
+            std_val = df[y_col].std()
+            if std_val > 0:
+                z_scores = np.abs((df[y_col] - avg_val) / std_val)
+                outliers = int((z_scores > 2.5).sum())
+                if outliers > 0:
+                    bullets.append(f"Detected **{outliers} statistical outlier point(s)** exhibiting more than 2.5 standard deviations from baseline mean.")
+        else:
+            bullets.append(f"Analyzed {len(df):,} total records grouped across category **{x_col}**.")
+
+        return bullets
+
+class SQLDatabaseConnector:
+    @staticmethod
+    def execute_live_query(engine_type, host, port, db_name, username, password, query, limit=5000):
+        query_strip = query.strip()
+        if not query_strip.lower().startswith('select'):
+            raise ValueError("Only read-only SELECT queries are permitted for live database connectors.")
+
+        if engine_type == 'sqlite' or host == 'local':
+            import sqlite3
+            db_path = db_name if db_name and os.path.exists(db_name) else os.path.join(settings.BASE_DIR, 'db.sqlite3')
+            conn = sqlite3.connect(db_path)
+            df = pd.read_sql_query(query_strip, conn)
+            conn.close()
+            return df.head(limit)
+
+        try:
+            import sqlalchemy
+            conn_str = f"{engine_type}://{username}:{password}@{host}:{port}/{db_name}"
+            engine = sqlalchemy.create_engine(conn_str, connect_args={'connect_timeout': 5})
+            df = pd.read_sql_query(query_strip, engine)
+            return df.head(limit)
+        except ImportError:
+            raise ValueError(f"Driver for '{engine_type}' database engine is not installed.")
+        except Exception as e:
+            raise ValueError(f"Database connection or execution failed: {str(e)}")
+
+class RESTDataConnector:
+    @staticmethod
+    def fetch_json_feed(endpoint_url, method='GET', headers=None, json_path=None):
+        import urllib.request
+        req = urllib.request.Request(endpoint_url, headers=headers or {'User-Agent': 'APEX-BI-Studio/2.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+                
+                if json_path and isinstance(payload, dict) and json_path in payload:
+                    payload = payload[json_path]
+                
+                if isinstance(payload, list):
+                    df = pd.json_normalize(payload)
+                elif isinstance(payload, dict):
+                    df = pd.json_normalize([payload])
+                else:
+                    raise ValueError("REST API response format must resolve to a JSON list or dictionary.")
+                return df
+        except Exception as e:
+            raise ValueError(f"Failed to ingest REST API feed from {endpoint_url}: {str(e)}")
+
+class WhatIfScenarioEngine:
+    @staticmethod
+    def simulate_scenario(df, adjustments):
+        """
+        adjustments format: [
+            {"column": "Sales", "multiplier": 1.15, "addition": 0},
+            {"column": "Cost", "multiplier": 1.05, "addition": 100}
+        ]
+        """
+        df_sim = df.copy()
+        scenario_metrics = {}
+
+        for adj in adjustments:
+            col = adj.get('column')
+            mult = float(adj.get('multiplier', 1.0))
+            add = float(adj.get('addition', 0.0))
+
+            if col in df_sim.columns and pd.api.types.is_numeric_dtype(df_sim[col]):
+                original_sum = float(df[col].sum())
+                df_sim[col] = (df_sim[col] * mult) + add
+                simulated_sum = float(df_sim[col].sum())
+                delta = simulated_sum - original_sum
+                pct_change = (delta / original_sum * 100) if original_sum != 0 else 0
+
+                scenario_metrics[col] = {
+                    'baseline_total': round(original_sum, 2),
+                    'simulated_total': round(simulated_sum, 2),
+                    'delta': round(delta, 2),
+                    'pct_change': round(pct_change, 2)
+                }
+
+        return df_sim, scenario_metrics
+
+class CustomerSegmentationEngine:
+    @staticmethod
+    def rfm_clustering(df, customer_id_col, date_col, monetary_col, n_clusters=3):
+        if customer_id_col not in df.columns or monetary_col not in df.columns:
+            raise ValueError("Customer ID and Monetary columns must exist in dataset.")
+
+        df_rfm = df.dropna(subset=[customer_id_col, monetary_col]).copy()
+        
+        # Calculate Frequency & Monetary
+        rfm_summary = df_rfm.groupby(customer_id_col).agg(
+            frequency=(customer_id_col, 'count'),
+            monetary=(monetary_col, 'sum')
+        ).reset_index()
+
+        # Recency calculation
+        if date_col in df.columns:
+            try:
+                df_rfm['temp_date'] = pd.to_datetime(df_rfm[date_col], errors='coerce')
+                max_date = df_rfm['temp_date'].max()
+                recency_df = df_rfm.groupby(customer_id_col)['temp_date'].max().reset_index()
+                recency_df['recency'] = (max_date - recency_df['temp_date']).dt.days
+                rfm_summary = rfm_summary.merge(recency_df[[customer_id_col, 'recency']], on=customer_id_col, how='left')
+            except:
+                rfm_summary['recency'] = 30
+        else:
+            rfm_summary['recency'] = 30
+
+        rfm_summary['recency'] = rfm_summary['recency'].fillna(30)
+
+        # Pure Python / Numpy K-Means fallback
+        X = rfm_summary[['recency', 'frequency', 'monetary']].values
+        # Normalize features
+        mean = np.mean(X, axis=0)
+        std = np.std(X, axis=0) + 1e-9
+        X_norm = (X - mean) / std
+
+        # Initialize k-means centroids
+        np.random.seed(42)
+        random_indices = np.random.choice(len(X_norm), size=min(n_clusters, len(X_norm)), replace=False)
+        centroids = X_norm[random_indices]
+
+        for _ in range(10):
+            distances = np.linalg.norm(X_norm[:, np.newaxis] - centroids, axis=2)
+            cluster_labels = np.argmin(distances, axis=1)
+            for k in range(len(centroids)):
+                if (cluster_labels == k).any():
+                    centroids[k] = X_norm[cluster_labels == k].mean(axis=0)
+
+        rfm_summary['cluster'] = [f"Segment {c+1}" for c in cluster_labels]
+        return rfm_summary.head(1000).to_dict(orient='records')
+
+class RowLevelSecurityEngine:
+    @staticmethod
+    def apply_rls_filters(df, dataset, user):
+        if not user or not user.is_authenticated or user.is_staff:
+            return df
+
+        from .models import RowLevelSecurityRule
+        rules = RowLevelSecurityRule.objects.filter(dataset=dataset, is_active=True)
+        user_rules = rules.filter(user=user)
+        
+        if not user_rules.exists() and hasattr(user, 'profile'):
+            user_rules = rules.filter(role=user.profile.role)
+
+        if not user_rules.exists():
+            return df
+
+        df_filtered = df.copy()
+        for rule in user_rules:
+            col = rule.column_name
+            val = rule.filter_value
+            op = rule.operator
+
+            if col in df_filtered.columns:
+                if op == 'eq':
+                    df_filtered = df_filtered[df_filtered[col].astype(str) == str(val)]
+                elif op == 'ne':
+                    df_filtered = df_filtered[df_filtered[col].astype(str) != str(val)]
+                elif op == 'gt':
+                    df_filtered = df_filtered[pd.to_numeric(df_filtered[col], errors='coerce') > float(val)]
+                elif op == 'lt':
+                    df_filtered = df_filtered[pd.to_numeric(df_filtered[col], errors='coerce') < float(val)]
+                elif op == 'in':
+                    vals = [v.strip() for v in val.split(',')]
+                    df_filtered = df_filtered[df_filtered[col].astype(str).isin(vals)]
+
+        return df_filtered
+
+class DAXFormulaParser:
+    @staticmethod
+    def evaluate_formula(df, formula):
+        formula_clean = formula.strip()
+        
+        # SUM(ColumnName)
+        if formula_clean.upper().startswith('SUM('):
+            col = formula_clean[4:-1].strip('[]"\' ')
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                return round(float(df[col].sum()), 2)
+        # AVG(ColumnName) or AVERAGE(ColumnName)
+        elif formula_clean.upper().startswith(('AVG(', 'AVERAGE(')):
+            col = formula_clean.split('(')[1][:-1].strip('[]"\' ')
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                return round(float(df[col].mean()), 2)
+        # COUNT(ColumnName)
+        elif formula_clean.upper().startswith('COUNT('):
+            col = formula_clean[6:-1].strip('[]"\' ')
+            if col in df.columns:
+                return int(df[col].count())
+        # DIVIDE(ColA, ColB)
+        elif formula_clean.upper().startswith('DIVIDE('):
+            parts = formula_clean[7:-1].split(',')
+            if len(parts) == 2:
+                col_a = parts[0].strip('[]"\' ')
+                col_b = parts[1].strip('[]"\' ')
+                val_a = float(df[col_a].sum()) if col_a in df.columns else 0.0
+                val_b = float(df[col_b].sum()) if col_b in df.columns else 1.0
+                return round(val_a / val_b, 4) if val_b != 0 else 0.0
+
+        raise ValueError(f"Unsupported or invalid DAX expression: '{formula}'")
+
 class AuditLogger:
     @staticmethod
     def log_action(user, action_type, resource_type, resource_id, details=None, request=None):

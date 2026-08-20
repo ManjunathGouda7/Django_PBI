@@ -904,4 +904,239 @@ def audit_logs_api(request):
         serializer = ActivityLogSerializer(logs, many=True)
         return JsonResponse({'status': 'success', 'audit_logs': serializer.data})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def smart_narrative_api(request, widget_id):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    widget = get_object_or_404(Widget, pk=widget_id)
+    try:
+        from .services import DatasetEngine, SmartNarrativeEngine
+        df = DatasetEngine.load_dataframe(widget.dashboard.dataset)
+        bullets = SmartNarrativeEngine.generate_widget_narrative(df, widget)
+        return JsonResponse({'status': 'success', 'widget_id': widget.id, 'narrative': bullets})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def sql_connect_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    try:
+        payload = json.loads(request.body)
+        engine_type = payload.get('engine_type', 'sqlite')
+        host = payload.get('host', 'local')
+        port = payload.get('port', 5432)
+        db_name = payload.get('db_name', '')
+        username = payload.get('username', '')
+        password = payload.get('password', '')
+        query = payload.get('query', 'SELECT 1;')
+
+        from .services import SQLDatabaseConnector
+        df = SQLDatabaseConnector.execute_live_query(engine_type, host, port, db_name, username, password, query)
+        return JsonResponse({
+            'status': 'success',
+            'row_count': len(df),
+            'columns': list(df.columns),
+            'data': df.fillna('').to_dict(orient='records')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def rest_ingest_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    try:
+        payload = json.loads(request.body)
+        endpoint_url = payload.get('endpoint_url')
+        method = payload.get('method', 'GET')
+        headers = payload.get('headers', {})
+        json_path = payload.get('json_path', '')
+
+        from .services import RESTDataConnector
+        df = RESTDataConnector.fetch_json_feed(endpoint_url, method, headers, json_path)
+        return JsonResponse({
+            'status': 'success',
+            'row_count': len(df),
+            'columns': list(df.columns),
+            'sample_data': df.head(10).fillna('').to_dict(orient='records')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def what_if_scenario_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        adjustments = payload.get('adjustments', [])
+        from .services import DatasetEngine, WhatIfScenarioEngine
+        df = DatasetEngine.load_dataframe(dataset)
+        df_sim, scenario_metrics = WhatIfScenarioEngine.simulate_scenario(df, adjustments)
+        return JsonResponse({
+            'status': 'success',
+            'dataset_id': dataset.id,
+            'scenario_metrics': scenario_metrics
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def rfm_clustering_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        customer_id_col = payload.get('customer_id_col')
+        date_col = payload.get('date_col', '')
+        monetary_col = payload.get('monetary_col')
+        n_clusters = int(payload.get('n_clusters', 3))
+
+        from .services import DatasetEngine, CustomerSegmentationEngine
+        df = DatasetEngine.load_dataframe(dataset)
+        segments = CustomerSegmentationEngine.rfm_clustering(df, customer_id_col, date_col, monetary_col, n_clusters)
+        return JsonResponse({'status': 'success', 'segments': segments})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def drill_through_api(request, widget_id):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    widget = get_object_or_404(Widget, pk=widget_id)
+    try:
+        category_col = request.GET.get('category_col', widget.x_axis)
+        category_val = request.GET.get('category_val', '')
+
+        from .services import DatasetEngine
+        df = DatasetEngine.load_dataframe(widget.dashboard.dataset)
+        if category_col in df.columns and category_val:
+            df = df[df[category_col].astype(str) == str(category_val)]
+
+        return JsonResponse({
+            'status': 'success',
+            'widget_title': widget.title,
+            'category_col': category_col,
+            'category_val': category_val,
+            'total_rows': len(df),
+            'rows': df.head(100).fillna('').to_dict(orient='records')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def rls_rules_api(request, dataset_id):
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    from .models import RowLevelSecurityRule
+    from .serializers import RowLevelSecurityRuleSerializer
+
+    if request.method == 'GET':
+        rules = dataset.rls_rules.filter(is_active=True)
+        serializer = RowLevelSecurityRuleSerializer(rules, many=True)
+        return JsonResponse({'status': 'success', 'rls_rules': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            col = payload.get('column_name')
+            op = payload.get('operator', 'eq')
+            val = payload.get('filter_value')
+            role = payload.get('role', '')
+
+            rule = RowLevelSecurityRule.objects.create(
+                dataset=dataset,
+                user=request.user if request.user.is_authenticated else None,
+                role=role,
+                column_name=col,
+                operator=op,
+                filter_value=val
+            )
+            return JsonResponse({'status': 'success', 'rule_id': rule.id, 'message': 'RLS rule created!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dax_eval_api(request, dataset_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    try:
+        payload = json.loads(request.body)
+        formula = payload.get('formula', '')
+
+        from .services import DatasetEngine, DAXFormulaParser
+        df = DatasetEngine.load_dataframe(dataset)
+        result = DAXFormulaParser.evaluate_formula(df, formula)
+        return JsonResponse({'status': 'success', 'formula': formula, 'result': result})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def kpi_alerts_api(request, widget_id):
+    widget = get_object_or_404(Widget, pk=widget_id)
+    from .models import KPIAlertRule
+    from .serializers import KPIAlertRuleSerializer
+
+    if request.method == 'GET':
+        alerts = widget.alerts.filter(is_active=True)
+        serializer = KPIAlertRuleSerializer(alerts, many=True)
+        return JsonResponse({'status': 'success', 'alerts': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            metric_col = payload.get('metric_column', widget.y_axis)
+            cond = payload.get('condition', 'gt')
+            thresh = float(payload.get('threshold_value', 0))
+            channel = payload.get('channel', 'webhook')
+            webhook_url = payload.get('webhook_url', '')
+
+            alert = KPIAlertRule.objects.create(
+                widget=widget,
+                created_by=request.user if request.user.is_authenticated else None,
+                metric_column=metric_col,
+                condition=cond,
+                threshold_value=thresh,
+                channel=channel,
+                webhook_url=webhook_url
+            )
+            return JsonResponse({'status': 'success', 'alert_id': alert.id, 'message': 'KPI Alert rule set successfully!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def widget_comments_api(request, widget_id):
+    widget = get_object_or_404(Widget, pk=widget_id)
+    from .models import WidgetComment
+    from .serializers import WidgetCommentSerializer
+
+    if request.method == 'GET':
+        comments = widget.comments.all().order_by('-created_at')
+        serializer = WidgetCommentSerializer(comments, many=True)
+        return JsonResponse({'status': 'success', 'comments': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            if not request.user.is_authenticated:
+                return JsonResponse({'error': 'Authentication required to post comments'}, status=401)
+            payload = json.loads(request.body)
+            text = payload.get('comment_text', '').strip()
+            pin_x = float(payload.get('pin_x', 0))
+            pin_y = float(payload.get('pin_y', 0))
+
+            comment = WidgetComment.objects.create(
+                widget=widget,
+                user=request.user,
+                comment_text=text,
+                pin_x=pin_x,
+                pin_y=pin_y
+            )
+            return JsonResponse({'status': 'success', 'comment_id': comment.id, 'message': 'Comment posted!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+

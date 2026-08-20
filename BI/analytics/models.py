@@ -117,6 +117,9 @@ class Dataset(models.Model):
         ('mongodb', 'MongoDB Database Server'),
         ('postgres', 'PostgreSQL'),
         ('mysql', 'MySQL'),
+        ('sqlserver', 'SQL Server'),
+        ('snowflake', 'Snowflake Warehouse'),
+        ('rest_api', 'REST API Endpoint'),
         ('json', 'JSON File'),
     )
     
@@ -417,3 +420,63 @@ class ActivityLog(models.Model):
     
     def __str__(self):
         return f"{self.user} - {self.action_type} - {self.resource_type}"
+
+class RowLevelSecurityRule(models.Model):
+    """Enforces fine-grained Row-Level Security (RLS) data access rules per dataset"""
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='rls_rules')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    role = models.CharField(max_length=50, blank=True, null=True)
+    column_name = models.CharField(max_length=100)
+    operator = models.CharField(max_length=10, choices=[
+        ('eq', 'Equals'),
+        ('ne', 'Not Equals'),
+        ('gt', 'Greater Than'),
+        ('lt', 'Less Than'),
+        ('in', 'In List'),
+    ], default='eq')
+    filter_value = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"RLS Rule for {self.dataset.name}: {self.column_name} {self.operator} {self.filter_value}"
+
+class KPIAlertRule(models.Model):
+    """Automated notification alert thresholds for KPI Cards and Widget Metrics"""
+    widget = models.ForeignKey(Widget, on_delete=models.CASCADE, related_name='alerts')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    metric_column = models.CharField(max_length=100)
+    condition = models.CharField(max_length=10, choices=[
+        ('gt', 'Greater Than'),
+        ('lt', 'Less Than'),
+        ('eq', 'Equals'),
+        ('gte', 'Greater Than or Equal'),
+        ('lte', 'Less Than or Equal'),
+    ], default='gt')
+    threshold_value = models.FloatField()
+    channel = models.CharField(max_length=20, choices=[
+        ('email', 'Email Notification'),
+        ('webhook', 'Generic Webhook'),
+        ('slack', 'Slack Webhook'),
+        ('teams', 'Microsoft Teams Webhook'),
+    ], default='webhook')
+    webhook_url = models.URLField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    last_triggered = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Alert: {self.widget.title} ({self.metric_column} {self.condition} {self.threshold_value})"
+
+class WidgetComment(models.Model):
+    """Sticky notes and collaborative comment pins on dashboard widgets"""
+    widget = models.ForeignKey(Widget, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    comment_text = models.TextField()
+    pin_x = models.FloatField(default=0)
+    pin_y = models.FloatField(default=0)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.user.username} on {self.widget.title}"
