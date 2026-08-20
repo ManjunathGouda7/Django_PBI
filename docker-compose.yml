@@ -14,10 +14,51 @@ services:
       - DEBUG=False
       - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
       - ALLOWED_HOSTS=*
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URL=mongodb://mongo:27017
+    volumes:
+      - media_data:/app/BI/media
+    depends_on:
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # Celery Async Worker Container
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: powerbi_celery_worker
+    restart: always
+    command: celery -A BI worker --loglevel=info
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URL=mongodb://mongo:27017
+    volumes:
+      - media_data:/app/BI/media
+    depends_on:
+      - redis
+      - mongo
+
+  # Celery Beat Scheduled Task Runner
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: powerbi_celery_beat
+    restart: always
+    command: celery -A BI beat --loglevel=info
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
+      - REDIS_URL=redis://redis:6379/0
       - MONGODB_URL=mongodb://mongo:27017
     depends_on:
-      - mongo
       - redis
+      - mongo
 
   # MongoDB Database Container
   mongo:
@@ -29,13 +70,20 @@ services:
     volumes:
       - mongo_data:/data/db
 
-  # Redis Cache Container
+  # Redis Cache & Task Broker Container
   redis:
     image: redis:alpine
     container_name: powerbi_redis
     restart: always
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mongo_data:
+  media_data:
+

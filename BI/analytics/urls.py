@@ -40,6 +40,12 @@ urlpatterns = [
     path('api/datasets/join/', api_views.join_datasets_api, name='api_join_datasets'),
 
 
+    path('api/dashboards/<int:dashboard_id>/share/', api_views.dashboard_share_api, name='api_dashboard_share'),
+    path('api/datasets/<int:dataset_id>/share/', api_views.dataset_share_api, name='api_dataset_share'),
+    path('api/datasets/<int:dataset_id>/schedules/', api_views.scheduled_refresh_api, name='api_scheduled_refresh'),
+    path('api/schedules/<int:schedule_id>/run/', api_views.run_scheduled_refresh_api, name='api_run_scheduled_refresh'),
+    path('api/audit-logs/', api_views.audit_logs_api, name='api_audit_logs'),
+
     path('api/dashboards/', api_views.dashboards_api, name='api_dashboards_list'),
     path('api/dashboards/<int:dashboard_id>/', api_views.dashboard_detail_api, name='api_dashboard_detail'),
     path('api/dashboards/<int:dashboard_id>/widgets/', api_views.widgets_api, name='api_widgets_list'),

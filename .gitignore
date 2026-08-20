@@ -29,6 +29,11 @@ data/*.json
 *.swp
 *.swo
 
+# PyInstaller Build Output
+build/
+dist/
+*.spec
+
 # OS files
 .DS_Store
 Thumbs.db

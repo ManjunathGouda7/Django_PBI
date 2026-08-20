@@ -10,9 +10,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Dataset, Dashboard, Widget, CalculatedMeasure, DatasetColumn, DatasetTag, DatasetSharePermission
-from .serializers import DatasetSerializer, DashboardSerializer, WidgetSerializer, UserSerializer
-from .permissions import IsOwnerOrReadOnly, IsAdminOrReadOnly
+from .models import Dataset, Dashboard, Widget, CalculatedMeasure, DatasetColumn, DatasetTag, DatasetSharePermission, DashboardShare, ScheduledRefresh, ActivityLog
+from .serializers import DatasetSerializer, DashboardSerializer, WidgetSerializer, UserSerializer, DatasetSharePermissionSerializer, DashboardShareSerializer, ScheduledRefreshSerializer, ActivityLogSerializer
+from .permissions import IsOwnerOrReadOnly, IsAdminOrReadOnly, IsOwnerOrShared, HasExportPermission, CanEditDashboard
 from .services import DatasetEngine
 from .chat_engine import DataChatEngine
 
@@ -20,12 +20,12 @@ from .chat_engine import DataChatEngine
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
 
 class DatasetViewSet(viewsets.ModelViewSet):
     queryset = Dataset.objects.all().order_by('-created_at')
     serializer_class = DatasetSerializer
-    permission_classes = [IsOwnerOrReadOnly]
+    permission_classes = [IsOwnerOrShared]
 
     @action(detail=True, methods=['get'])
     def schema(self, request, pk=None):
@@ -49,12 +49,12 @@ class DatasetViewSet(viewsets.ModelViewSet):
 class DashboardViewSet(viewsets.ModelViewSet):
     queryset = Dashboard.objects.all().order_by('-created_at')
     serializer_class = DashboardSerializer
-    permission_classes = [IsOwnerOrReadOnly]
+    permission_classes = [IsOwnerOrShared]
 
 class WidgetViewSet(viewsets.ModelViewSet):
     queryset = Widget.objects.all().order_by('-created_at')
     serializer_class = WidgetSerializer
-    permission_classes = [IsOwnerOrReadOnly]
+    permission_classes = [IsOwnerOrShared]
 
 # Auth APIs
 @csrf_exempt
@@ -263,13 +263,23 @@ def datasets_list_api(request):
             file_type = 'json'
         elif fname.endswith(('.xlsx', '.xls')):
             file_type = 'excel'
-        else:
+        elif fname.endswith('.csv'):
             file_type = 'csv'
+        else:
+            return JsonResponse({'error': f'Unsupported file extension. Allowed extensions: .csv, .excel, .json'}, status=400)
 
+        try:
+            from .services import DatasetValidator
+            validated_df = DatasetValidator.validate_and_parse(file_obj, file_type)
+        except ValueError as val_err:
+            return JsonResponse({'error': str(val_err)}, status=400)
+
+        user = request.user if request.user.is_authenticated else None
         dataset = Dataset.objects.create(
             name=name,
             file=file_obj,
             file_type=file_type,
+            created_by=user,
             is_sample=False
         )
 
@@ -768,3 +778,130 @@ def schedule_etl_api(request, dataset_id):
         return JsonResponse({'status': 'success', 'data': etl_result})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dashboard_share_api(request, dashboard_id):
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+
+    if request.method == 'GET':
+        shares = dashboard.shares.all()
+        serializer = DashboardShareSerializer(shares, many=True)
+        return JsonResponse({'status': 'success', 'shares': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            email = payload.get('email', '').strip()
+            user_id = payload.get('user_id')
+            permission_level = payload.get('permission_level', 'view')
+            can_export = payload.get('can_export', True)
+
+            target_user = User.objects.filter(pk=user_id).first() if user_id else None
+            share = DashboardShare.objects.create(
+                dashboard=dashboard,
+                user=target_user,
+                email=email,
+                permission_level=permission_level,
+                can_export=can_export
+            )
+            from .services import AuditLogger
+            AuditLogger.log_action(request.user, 'SHARE', 'Dashboard', dashboard.id, {'shared_email': email, 'permission_level': permission_level}, request)
+            return JsonResponse({'status': 'success', 'share_id': share.id, 'message': 'Dashboard shared successfully!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method == 'DELETE':
+        try:
+            share_id = request.GET.get('share_id')
+            share = get_object_or_404(DashboardShare, pk=share_id, dashboard=dashboard)
+            share.delete()
+            return JsonResponse({'status': 'success', 'message': 'Share revoked successfully!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dataset_share_api(request, dataset_id):
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+
+    if request.method == 'GET':
+        shares = dataset.share_permissions.all()
+        serializer = DatasetSharePermissionSerializer(shares, many=True)
+        return JsonResponse({'status': 'success', 'shares': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            email = payload.get('email', '').strip()
+            user_id = payload.get('user_id')
+            permission_level = payload.get('permission_level', 'view')
+            can_export = payload.get('can_export', True)
+
+            target_user = User.objects.filter(pk=user_id).first() if user_id else None
+            share = DatasetSharePermission.objects.create(
+                dataset=dataset,
+                user=target_user,
+                email=email,
+                permission_level=permission_level,
+                can_export=can_export
+            )
+            from .services import AuditLogger
+            AuditLogger.log_action(request.user, 'SHARE', 'Dataset', dataset.id, {'shared_email': email, 'permission_level': permission_level}, request)
+            return JsonResponse({'status': 'success', 'share_id': share.id, 'message': 'Dataset shared successfully!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def scheduled_refresh_api(request, dataset_id):
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+
+    if request.method == 'GET':
+        schedules = dataset.schedules.all()
+        serializer = ScheduledRefreshSerializer(schedules, many=True)
+        return JsonResponse({'status': 'success', 'schedules': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            frequency = payload.get('frequency', 'daily')
+            schedule = ScheduledRefresh.objects.create(
+                dataset=dataset,
+                frequency=frequency,
+                created_by=request.user if request.user.is_authenticated else None
+            )
+            return JsonResponse({'status': 'success', 'schedule_id': schedule.id, 'message': 'Scheduled refresh created!'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def run_scheduled_refresh_api(request, schedule_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    schedule = get_object_or_404(ScheduledRefresh, pk=schedule_id)
+    try:
+        from .tasks import async_run_scheduled_refresh_task
+        res = async_run_scheduled_refresh_task(schedule.id)
+        from .services import AuditLogger
+        AuditLogger.log_action(request.user, 'REFRESH', 'Dataset', schedule.dataset.id if schedule.dataset else 0, {'schedule_id': schedule.id}, request)
+        return JsonResponse({'status': 'success', 'result': res})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def audit_logs_api(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    try:
+        logs = ActivityLog.objects.all().order_by('-timestamp')
+        resource_type = request.GET.get('resource_type')
+        action_type = request.GET.get('action_type')
+
+        if resource_type:
+            logs = logs.filter(resource_type__iexact=resource_type)
+        if action_type:
+            logs = logs.filter(action_type__iexact=action_type)
+
+        logs = logs[:100]
+        serializer = ActivityLogSerializer(logs, many=True)
+        return JsonResponse({'status': 'success', 'audit_logs': serializer.data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
