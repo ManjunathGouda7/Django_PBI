@@ -86,6 +86,8 @@ def export_dashboard_view(request, dashboard_id):
     Printable export template for a dashboard.
     """
     dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    from .services import AuditLogger
+    AuditLogger.log_action(request.user, 'EXPORT', 'Dashboard', dashboard.id, {'format': 'print'}, request)
     return render(request, 'analytics/export_pdf.html', {'dashboard': dashboard})
 
 def favicon_view(request):
@@ -100,8 +102,9 @@ def export_csv_view(request, dataset_id):
     Downloads active dataset telemetry records as a CSV file.
     """
     dataset = get_object_or_404(Dataset, pk=dataset_id)
-    from .services import DatasetEngine
+    from .services import DatasetEngine, AuditLogger
     df = DatasetEngine.load_dataframe(dataset)
+    AuditLogger.log_action(request.user, 'EXPORT', 'Dataset', dataset.id, {'format': 'csv', 'rows': len(df)}, request)
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="{dataset.name}_telemetry.csv"'
     df.to_csv(path_or_buf=response, index=False)
@@ -113,6 +116,8 @@ def export_excel_view(request, dataset_id):
     """
     dataset = get_object_or_404(Dataset, pk=dataset_id)
     from .analytics_advanced import ExcelExporter
+    from .services import AuditLogger
+    AuditLogger.log_action(request.user, 'EXPORT', 'Dataset', dataset.id, {'format': 'excel'}, request)
     return ExcelExporter.generate_excel_workbook(dataset)
 
 def export_executive_pdf_view(request, dashboard_id):
@@ -121,7 +126,8 @@ def export_executive_pdf_view(request, dashboard_id):
     """
     dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
     dataset = dashboard.dataset
-    from .services import DatasetEngine
+    from .services import DatasetEngine, AuditLogger
+    AuditLogger.log_action(request.user, 'EXPORT', 'Dashboard', dashboard.id, {'format': 'pdf'}, request)
     df = DatasetEngine.load_dataframe(dataset) if dataset else None
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist() if df is not None and not df.empty else []
 

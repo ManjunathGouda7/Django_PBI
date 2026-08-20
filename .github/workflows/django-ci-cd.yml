@@ -18,6 +18,11 @@ jobs:
         image: mongo:latest
         ports:
           - 27017:27017
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
 
     steps:
     - name: Check out Repository
@@ -33,6 +38,10 @@ jobs:
         python -m pip install --upgrade pip setuptools
         pip install -r requirements.txt
 
+    - name: Run Syntax & Code Checks
+      run: |
+        python -m py_compile BI/manage.py
+
     - name: Run Django System Checks & Migrations Check
       run: |
         cd BI
@@ -40,10 +49,13 @@ jobs:
         python manage.py makemigrations --check --dry-run
 
     - name: Run Automated Unit Tests
+      env:
+        REDIS_URL: redis://localhost:6379/0
       run: |
         cd BI
-        python manage.py test analytics
+        python manage.py test analytics --verbosity=2
 
     - name: Build Docker Image Validation
       run: |
         docker build -t powerbi-django:latest .
+

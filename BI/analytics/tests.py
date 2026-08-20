@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from .models import Dataset, Dashboard, Widget, UserProfile
+from .models import Dataset, Dashboard, Widget, UserProfile, DatasetColumn
 from .services import DatasetEngine
 import pandas as pd
 
@@ -191,6 +191,160 @@ class EnterpriseAdvancedTests(TestCase):
         self.assertTrue(DataWrangler.validate_formula_security("Power * 1.15", ["Power", "PFO_mW"]))
         with self.assertRaises(ValueError):
             DataWrangler.validate_formula_security("__import__('os').system('ls')", ["Power"])
+
+class NewFeaturesModelAndSerializerTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='modeluser', password='password123')
+        self.dataset = Dataset.objects.create(
+            name='Schema Test Dataset',
+            file_type='sample',
+            is_sample=True,
+            created_by=self.user
+        )
+        self.dashboard = Dashboard.objects.create(
+            title='Schema Test Dashboard',
+            dataset=self.dataset,
+            created_by=self.user
+        )
+
+    def test_dataset_column_relationship(self):
+        col = DatasetColumn.objects.create(
+            dataset=self.dataset,
+            name='TestCol',
+            data_type='numeric',
+            distinct_count=5
+        )
+        self.assertEqual(self.dataset.columns.count(), 1)
+        self.assertEqual(self.dataset.columns.first().name, 'TestCol')
+
+    def test_owner_property_alias(self):
+        self.assertEqual(self.dataset.owner, self.user)
+        self.assertEqual(self.dashboard.owner, self.user)
+
+    def test_dashboard_share_model_and_serializer(self):
+        from .models import DashboardShare
+        from .serializers import DashboardShareSerializer
+        share = DashboardShare.objects.create(
+            dashboard=self.dashboard,
+            user=self.user,
+            permission_level='edit',
+            can_export=True
+        )
+        serializer = DashboardShareSerializer(share)
+        self.assertEqual(serializer.data['permission_level'], 'edit')
+        self.assertEqual(serializer.data['shared_username'], 'modeluser')
+
+    def test_scheduled_refresh_model_and_serializer(self):
+        from .models import ScheduledRefresh
+        from .serializers import ScheduledRefreshSerializer
+        schedule = ScheduledRefresh.objects.create(
+            dataset=self.dataset,
+            frequency='daily',
+            created_by=self.user
+        )
+        serializer = ScheduledRefreshSerializer(schedule)
+        self.assertEqual(serializer.data['frequency'], 'daily')
+        self.assertEqual(serializer.data['created_by_username'], 'modeluser')
+
+class UploadValidationAndPermissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='validatoruser', password='password123')
+
+    def test_validate_file_extension(self):
+        from .services import DatasetValidator
+        self.assertTrue(DatasetValidator.validate_file_extension('data.csv'))
+        self.assertTrue(DatasetValidator.validate_file_extension('report.xlsx'))
+        self.assertTrue(DatasetValidator.validate_file_extension('telemetry.json'))
+        with self.assertRaises(ValueError):
+            DatasetValidator.validate_file_extension('malicious.exe')
+
+    def test_sanitize_columns(self):
+        from .services import DatasetValidator
+        df = pd.DataFrame({'<script>alert(1)</script>Col': [1, 2], 'Normal': [3, 4]})
+        clean_df = DatasetValidator.sanitize_columns(df)
+        self.assertIn('alert(1)Col', clean_df.columns)
+        self.assertNotIn('<script>alert(1)</script>Col', clean_df.columns)
+
+    def test_export_permission(self):
+        from .models import Dataset, DatasetSharePermission
+        from .permissions import HasExportPermission
+        dataset = Dataset.objects.create(name='Private DS', created_by=self.user)
+        perm = HasExportPermission()
+
+        class DummyRequest:
+            user = self.user
+
+        req = DummyRequest()
+        self.assertTrue(perm.has_object_permission(req, None, dataset))
+
+class AsyncTasksAndAuditLogTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='taskuser', password='password123')
+        self.dataset = Dataset.objects.create(
+            name='Task DS',
+            file_type='sample',
+            is_sample=True,
+            created_by=self.user
+        )
+
+    def test_async_process_dataset_upload_task(self):
+        from .tasks import async_process_dataset_upload_task
+        res = async_process_dataset_upload_task(self.dataset.id)
+        self.assertEqual(res['status'], 'success')
+        self.dataset.refresh_from_db()
+        self.assertEqual(self.dataset.status, 'ready')
+
+    def test_async_run_scheduled_refresh_task(self):
+        from .models import ScheduledRefresh
+        from .tasks import async_run_scheduled_refresh_task
+        schedule = ScheduledRefresh.objects.create(dataset=self.dataset, frequency='daily', created_by=self.user)
+        res = async_run_scheduled_refresh_task(schedule.id)
+        self.assertEqual(res['status'], 'success')
+
+    def test_audit_logger(self):
+        from .services import AuditLogger
+        from .models import ActivityLog
+        log = AuditLogger.log_action(self.user, 'CREATE', 'Dataset', self.dataset.id, {'name': 'Task DS'})
+        self.assertIsNotNone(log)
+        self.assertEqual(ActivityLog.objects.filter(resource_type='Dataset').count(), 1)
+
+class DashboardSharingAndScheduledRefreshAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='apiuser', password='password123')
+        self.dataset = Dataset.objects.create(name='API DS', file_type='sample', is_sample=True, created_by=self.user)
+        self.dashboard = Dashboard.objects.create(title='API DB', dataset=self.dataset, created_by=self.user)
+
+    def test_dashboard_share_api(self):
+        url = reverse('analytics:api_dashboard_share', kwargs={'dashboard_id': self.dashboard.id})
+        response = self.client.post(
+            url,
+            data=f'{{"user_id": {self.user.id}, "permission_level": "edit", "can_export": true}}',
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'success')
+
+    def test_scheduled_refresh_api(self):
+        url = reverse('analytics:api_scheduled_refresh', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.post(
+            url,
+            data='{"frequency": "hourly"}',
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'success')
+
+    def test_audit_logs_api(self):
+        from .services import AuditLogger
+        AuditLogger.log_action(self.user, 'VIEW', 'Dashboard', self.dashboard.id)
+        url = reverse('analytics:api_audit_logs')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertTrue(len(data['audit_logs']) > 0)
+
 
 
 

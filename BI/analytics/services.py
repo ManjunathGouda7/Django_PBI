@@ -392,4 +392,91 @@ class DatasetEngine:
                 'datasets': [{'label': 'Error', 'data': []}]
             }
 
+import re
+
+class DatasetValidator:
+    ALLOWED_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.json'}
+    
+    @staticmethod
+    def validate_file_extension(filename):
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in DatasetValidator.ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported file extension '{ext}'. Allowed extensions: {', '.join(sorted(DatasetValidator.ALLOWED_EXTENSIONS))}")
+        return True
+
+    @staticmethod
+    def validate_file_size(file_obj, max_mb=None):
+        if max_mb is None:
+            max_mb = getattr(settings, 'MAX_UPLOAD_SIZE_MB', 50)
+        size_mb = file_obj.size / (1024 * 1024)
+        if size_mb > max_mb:
+            raise ValueError(f"File size ({size_mb:.1f} MB) exceeds maximum allowed limit of {max_mb} MB")
+        return True
+
+    @staticmethod
+    def validate_and_parse(file_obj, file_type):
+        filename = getattr(file_obj, 'name', 'file')
+        DatasetValidator.validate_file_extension(filename)
+        DatasetValidator.validate_file_size(file_obj)
+
+        try:
+            file_obj.seek(0)
+            if file_type == 'json' or filename.lower().endswith('.json'):
+                df = pd.read_json(file_obj)
+            elif file_type == 'excel' or filename.lower().endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_obj)
+            else:
+                df = pd.read_csv(file_obj)
+            file_obj.seek(0)
+            
+            if df.empty:
+                raise ValueError("Uploaded dataset file is empty.")
+            
+            cleaned_df = DatasetValidator.sanitize_columns(df)
+            return cleaned_df
+        except Exception as e:
+            file_obj.seek(0)
+            if isinstance(e, ValueError):
+                raise e
+            raise ValueError(f"Corrupt or invalid dataset file content: {str(e)}")
+
+    @staticmethod
+    def sanitize_columns(df):
+        sanitized_cols = []
+        for col in df.columns:
+            clean = re.sub(r'<[^>]*>', '', str(col)).strip()
+            clean = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', clean)
+            sanitized_cols.append(clean if clean else 'unnamed_column')
+        df.columns = sanitized_cols
+        return df
+
+class AuditLogger:
+    @staticmethod
+    def log_action(user, action_type, resource_type, resource_id, details=None, request=None):
+        try:
+            from .models import ActivityLog
+            ip_address = '127.0.0.1'
+            user_agent = ''
+
+            if request:
+                x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+                if x_forwarded:
+                    ip_address = x_forwarded.split(',')[0].strip()
+                else:
+                    ip_address = request.META.get('REMOTE_ADDR', '127.0.0.1')
+                user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+            return ActivityLog.objects.create(
+                user=user if user and user.is_authenticated else None,
+                action_type=action_type,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                details=details or {},
+                ip_address=ip_address,
+                user_agent=user_agent[:255] if user_agent else ''
+            )
+        except Exception as e:
+            print(f"Error recording audit log: {e}")
+            return None
+
 clear_dataset_cache = DatasetEngine.clear_cache

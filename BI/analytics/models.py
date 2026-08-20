@@ -48,6 +48,7 @@ class DatasetTag(models.Model):
         return self.name
 
 class DatasetColumn(models.Model):
+    dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE, related_name='columns', null=True, blank=True)
     name = models.CharField(max_length=255)
     data_type = models.CharField(max_length=50, default='string')
     distinct_count = models.IntegerField(default=0)
@@ -57,8 +58,56 @@ class DatasetColumn(models.Model):
     sample_values = models.JSONField(default=list, blank=True)
 
 class DatasetSharePermission(models.Model):
-    permission_level = models.CharField(max_length=20, default='read')
+    PERMISSION_LEVELS = (
+        ('view', 'View Only'),
+        ('edit', 'Can Edit'),
+        ('admin', 'Full Control'),
+    )
+    dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE, related_name='share_permissions', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dataset_shares', null=True, blank=True)
+    email = models.EmailField(blank=True, null=True)
+    permission_level = models.CharField(max_length=20, choices=PERMISSION_LEVELS, default='view')
+    can_export = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        target = self.user.username if self.user else self.email
+        return f"{self.dataset.name if self.dataset else 'All'} - {target} ({self.permission_level})"
+
+class DashboardShare(models.Model):
+    PERMISSION_LEVELS = (
+        ('view', 'View Only'),
+        ('edit', 'Can Edit'),
+        ('admin', 'Full Control'),
+    )
+    dashboard = models.ForeignKey('Dashboard', on_delete=models.CASCADE, related_name='shares', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dashboard_shares', null=True, blank=True)
+    email = models.EmailField(blank=True, null=True)
+    permission_level = models.CharField(max_length=20, choices=PERMISSION_LEVELS, default='view')
+    can_export = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        target = self.user.username if self.user else self.email
+        return f"{self.dashboard.title if self.dashboard else 'All'} - {target} ({self.permission_level})"
+
+class ScheduledRefresh(models.Model):
+    FREQUENCY_CHOICES = (
+        ('hourly', 'Hourly'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+    )
+    dataset = models.ForeignKey('Dataset', on_delete=models.CASCADE, related_name='schedules', null=True, blank=True)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='daily')
+    is_active = models.BooleanField(default=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    next_run = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.dataset.name if self.dataset else 'Unknown'} ({self.frequency})"
+
 
 class Dataset(models.Model):
     FILE_TYPES = (
@@ -148,6 +197,10 @@ class Dataset(models.Model):
     def __str__(self):
         return f"{self.name} ({self.row_count} rows)"
     
+    @property
+    def owner(self):
+        return self.created_by
+
     def save(self, *args, **kwargs):
         if self.file:
             try:
@@ -222,6 +275,10 @@ class Dashboard(models.Model):
     def __str__(self):
         return f"{self.title} (v{self.version})"
     
+    @property
+    def owner(self):
+        return self.created_by
+
     def save(self, *args, **kwargs):
         if self.status == 'published' and not self.published_at:
             self.published_at = timezone.now()
