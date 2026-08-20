@@ -1,0 +1,6 @@
+ERROR 2026-08-20 17:47:08,967 [analytics.api_views:1267] dashboard_revisions_api error: 'Widget' object has no attribute 'color'
+Traceback (most recent call last):
+  File "D:\Manju\PowerBI_Django\BI\analytics\api_views.py", line 1241, in dashboard_revisions_api
+    'color': w.color
+             ^^^^^^^
+AttributeError: 'Widget' object has no attribute 'color'

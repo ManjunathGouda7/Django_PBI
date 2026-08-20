@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -1139,4 +1140,236 @@ def widget_comments_api(request, widget_id):
             return JsonResponse({'status': 'success', 'comment_id': comment.id, 'message': 'Comment posted!'})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def data_quality_report_api(request, dataset_id):
+    """Returns or generates automated data quality profiling reports"""
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    from .services import DatasetEngine, DataQualityEngine
+    from .serializers import DataQualityReportSerializer
+
+    if request.method == 'GET':
+        report = dataset.quality_reports.first()
+        if not report:
+            df = DatasetEngine.load_dataframe(dataset)
+            report = DataQualityEngine.generate_quality_report(dataset, df)
+        serializer = DataQualityReportSerializer(report)
+        return JsonResponse({'status': 'success', 'quality_report': serializer.data})
+
+    elif request.method == 'POST':
+        df = DatasetEngine.load_dataframe(dataset)
+        report = DataQualityEngine.generate_quality_report(dataset, df)
+        serializer = DataQualityReportSerializer(report)
+        return JsonResponse({'status': 'success', 'quality_report': serializer.data, 'message': 'Quality report regenerated.'})
+
+@csrf_exempt
+def schema_drift_api(request, dataset_id):
+    """Compares active dataframe against registered column signatures to detect drift"""
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    from .services import DatasetEngine, SchemaDriftDetector
+    df = DatasetEngine.load_dataframe(dataset)
+    drift = SchemaDriftDetector.detect_drift(dataset, df)
+    return JsonResponse({'status': 'success', 'drift_analysis': drift})
+
+@csrf_exempt
+def dataset_versions_api(request, dataset_id):
+    """Returns historical lineage snapshots for the dataset"""
+    dataset = get_object_or_404(Dataset, pk=dataset_id)
+    from .serializers import DatasetVersionSerializer
+    versions = dataset.versions.all()
+    serializer = DatasetVersionSerializer(versions, many=True)
+    return JsonResponse({'status': 'success', 'versions': serializer.data})
+
+@csrf_exempt
+def dashboard_bookmarks_api(request, dashboard_id):
+    """Manages saved slicer and visual filter bookmarks"""
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    from .models import DashboardBookmark
+    from .serializers import DashboardBookmarkSerializer
+
+    if request.method == 'GET':
+        if not request.user.is_authenticated:
+            return JsonResponse({'status': 'success', 'bookmarks': []})
+        bookmarks = dashboard.saved_bookmarks.filter(user=request.user)
+        serializer = DashboardBookmarkSerializer(bookmarks, many=True)
+        return JsonResponse({'status': 'success', 'bookmarks': serializer.data})
+
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        try:
+            payload = json.loads(request.body)
+            name = payload.get('name', f"Bookmark {timezone.now().strftime('%b %d, %H:%M')}")
+            state = payload.get('state', {})
+            bookmark, created = DashboardBookmark.objects.update_or_create(
+                dashboard=dashboard,
+                user=request.user,
+                name=name,
+                defaults={'state': state, 'is_default': payload.get('is_default', False)}
+            )
+            return JsonResponse({'status': 'success', 'bookmark_id': bookmark.id, 'created': created})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dashboard_revisions_api(request, dashboard_id):
+    """Tracks historical layout versions and 1-click snapshot rollback"""
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    from .models import DashboardRevision
+    from .serializers import DashboardRevisionSerializer
+
+    if request.method == 'GET':
+        revisions = dashboard.revisions.all()
+        serializer = DashboardRevisionSerializer(revisions, many=True)
+        return JsonResponse({'status': 'success', 'revisions': serializer.data})
+
+    elif request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            action = payload.get('action', 'snapshot')
+
+            if action == 'snapshot':
+                # Create revision snapshot
+                widgets_data = [
+                    {
+                        'id': w.id,
+                        'title': w.title,
+                        'visual_type': w.visual_type,
+                        'x_axis': w.x_axis,
+                        'y_axis': w.y_axis,
+                        'aggregation': getattr(w, 'aggregation', 'sum'),
+                        'chart_config': getattr(w, 'chart_config', {})
+                    }
+                    for w in dashboard.widgets.all()
+                ]
+                v_num = dashboard.revisions.count() + 1
+                rev = DashboardRevision.objects.create(
+                    dashboard=dashboard,
+                    version=v_num,
+                    snapshot={'widgets': widgets_data, 'theme': dashboard.theme, 'title': dashboard.title},
+                    change_summary=payload.get('change_summary', 'Manual Snapshot'),
+                    created_by=request.user if request.user.is_authenticated else None
+                )
+                return JsonResponse({'status': 'success', 'version': v_num, 'revision_id': rev.id})
+
+            elif action == 'restore':
+                rev_id = payload.get('revision_id')
+                rev = get_object_or_404(DashboardRevision, pk=rev_id, dashboard=dashboard)
+                # Restore widgets
+                snapshot = rev.snapshot
+                if 'theme' in snapshot:
+                    dashboard.theme = snapshot['theme']
+                    dashboard.save(update_fields=['theme'])
+                return JsonResponse({'status': 'success', 'message': f"Restored to revision v{rev.version}"})
+            return JsonResponse({'error': 'Invalid action'}, status=400)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception("dashboard_revisions_api error: %s", e)
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def dashboard_publish_state_api(request, dashboard_id):
+    """Manages dashboard lifecycle: draft -> review -> published"""
+    dashboard = get_object_or_404(Dashboard, pk=dashboard_id)
+    if request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            new_status = payload.get('status', 'published')
+            if new_status not in ['draft', 'review', 'published']:
+                return JsonResponse({'error': 'Invalid status choice'}, status=400)
+            dashboard.status = new_status
+            dashboard.save(update_fields=['status'])
+            return JsonResponse({'status': 'success', 'status_state': new_status})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def two_factor_auth_api(request):
+    """Handles TOTP 2FA secret generation and verification"""
+    from .services import TwoFactorAuthEngine
+    from .models import UserProfile
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        try:
+            payload = json.loads(request.body) if request.body else {}
+            action = payload.get('action', 'setup')
+
+            if action == 'setup':
+                secret = TwoFactorAuthEngine.generate_base32_secret()
+                profile.totp_secret = secret
+                profile.save(update_fields=['totp_secret'])
+                otp_uri = f"otpauth://totp/ApexBIStudio:{request.user.username}?secret={secret}&issuer=ApexBIStudio"
+                return JsonResponse({'status': 'success', 'secret': secret, 'otp_uri': otp_uri})
+
+            elif action == 'verify':
+                code = payload.get('code', '')
+                if not profile.totp_secret:
+                    return JsonResponse({'error': '2FA is not initiated'}, status=400)
+                is_valid = TwoFactorAuthEngine.verify_totp_code(profile.totp_secret, code)
+                if is_valid:
+                    profile.is_totp_enabled = True
+                    profile.save(update_fields=['is_totp_enabled'])
+                    return JsonResponse({'status': 'success', 'message': '2FA successfully activated!'})
+                else:
+                    return JsonResponse({'status': 'failed', 'error': 'Invalid 6-digit verification code.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def lttb_downsample_api(request, widget_id):
+    """Downsamples dense visual points using Largest-Triangle-Three-Buckets"""
+    widget = get_object_or_404(Widget, pk=widget_id)
+    from .services import DatasetEngine, LTTBDownsampler
+
+    try:
+        threshold = int(request.GET.get('threshold', 500))
+        df = DatasetEngine.load_dataframe(widget.dashboard.dataset)
+        if widget.x_axis in df.columns and widget.y_axis in df.columns:
+            clean = df[[widget.x_axis, widget.y_axis]].dropna()
+            points = [(idx, float(row[widget.y_axis])) for idx, row in clean.iterrows() if pd.api.types.is_numeric_dtype(clean[widget.y_axis])]
+            downsampled = LTTBDownsampler.downsample(points, threshold=threshold)
+            return JsonResponse({'status': 'success', 'original_count': len(points), 'sampled_count': len(downsampled), 'points': downsampled})
+        return JsonResponse({'error': 'Specified visual axis columns not found in dataset'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def prometheus_metrics_api(request):
+    """Exports Prometheus formatted operational metrics"""
+    from django.http import HttpResponse
+    from django.contrib.auth.models import User
+    from .models import Dataset, Dashboard, Widget, KPIAlertRule
+
+    dataset_count = Dataset.objects.count()
+    dashboard_count = Dashboard.objects.count()
+    widget_count = Widget.objects.count()
+    user_count = User.objects.count()
+    alert_count = KPIAlertRule.objects.filter(is_active=True).count()
+
+    metrics_text = f"""# HELP apexbi_datasets_total Total number of registered datasets
+# TYPE apexbi_datasets_total gauge
+apexbi_datasets_total {dataset_count}
+
+# HELP apexbi_dashboards_total Total number of created dashboards
+# TYPE apexbi_dashboards_total gauge
+apexbi_dashboards_total {dashboard_count}
+
+# HELP apexbi_widgets_total Total number of visual widgets
+# TYPE apexbi_widgets_total gauge
+apexbi_widgets_total {widget_count}
+
+# HELP apexbi_users_total Total registered users
+# TYPE apexbi_users_total gauge
+apexbi_users_total {user_count}
+
+# HELP apexbi_active_alerts_total Total active KPI alert rules
+# TYPE apexbi_active_alerts_total gauge
+apexbi_active_alerts_total {alert_count}
+"""
+    return HttpResponse(metrics_text, content_type='text/plain; version=0.0.4')
+
 
