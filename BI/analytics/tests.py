@@ -408,6 +408,15 @@ class EnterpriseExpansionFeatureTests(TestCase):
         self.assertEqual(res_comm.status_code, 200)
         self.assertEqual(res_comm.json()['status'], 'success')
 
+    def test_health_check_endpoint(self):
+        url = reverse('analytics:health_check')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'healthy')
+        self.assertTrue(data['db_ok'])
+        self.assertTrue(data['cache_ok'])
+
 
 
 

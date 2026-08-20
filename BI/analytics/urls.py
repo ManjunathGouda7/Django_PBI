@@ -7,6 +7,7 @@ app_name = 'analytics'
 urlpatterns = [
     # Main Application & Auth Portal
     path('', views.index_view, name='index'),
+    path('health/', views.health_check_view, name='health_check'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('favicon.ico', views.favicon_view, name='favicon'),
