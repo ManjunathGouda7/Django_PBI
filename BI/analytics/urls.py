@@ -59,6 +59,17 @@ urlpatterns = [
     path('api/widgets/<int:widget_id>/alerts/', api_views.kpi_alerts_api, name='api_kpi_alerts'),
     path('api/widgets/<int:widget_id>/comments/', api_views.widget_comments_api, name='api_widget_comments'),
 
+    # Enterprise Architecture & Production Readiness APIs
+    path('api/datasets/<int:dataset_id>/quality-report/', api_views.data_quality_report_api, name='api_data_quality_report'),
+    path('api/datasets/<int:dataset_id>/schema-drift/', api_views.schema_drift_api, name='api_schema_drift'),
+    path('api/datasets/<int:dataset_id>/versions/', api_views.dataset_versions_api, name='api_dataset_versions'),
+    path('api/dashboards/<int:dashboard_id>/bookmarks/', api_views.dashboard_bookmarks_api, name='api_dashboard_bookmarks'),
+    path('api/dashboards/<int:dashboard_id>/revisions/', api_views.dashboard_revisions_api, name='api_dashboard_revisions'),
+    path('api/dashboards/<int:dashboard_id>/publish-state/', api_views.dashboard_publish_state_api, name='api_dashboard_publish_state'),
+    path('api/auth/2fa/', api_views.two_factor_auth_api, name='api_two_factor_auth'),
+    path('api/widgets/<int:widget_id>/lttb-downsample/', api_views.lttb_downsample_api, name='api_lttb_downsample'),
+    path('metrics/', api_views.prometheus_metrics_api, name='prometheus_metrics'),
+
     path('api/dashboards/', api_views.dashboards_api, name='api_dashboards_list'),
     path('api/dashboards/<int:dashboard_id>/', api_views.dashboard_detail_api, name='api_dashboard_detail'),
     path('api/dashboards/<int:dashboard_id>/widgets/', api_views.widgets_api, name='api_widgets_list'),

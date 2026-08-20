@@ -148,4 +148,46 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['timestamp']
 
+class DashboardBookmarkSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        from .models import DashboardBookmark
+        model = DashboardBookmark
+        fields = '__all__'
+        read_only_fields = ['created_at', 'user']
+
+class DashboardRevisionSerializer(serializers.ModelSerializer):
+    author = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        from .models import DashboardRevision
+        model = DashboardRevision
+        fields = '__all__'
+        read_only_fields = ['created_at', 'created_by']
+
+class DatasetVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import DatasetVersion
+        model = DatasetVersion
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+class DataQualityReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import DataQualityReport
+        model = DataQualityReport
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+class DatasetAccessInviteSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        from .models import DatasetAccessInvite
+        model = DatasetAccessInvite
+        fields = '__all__'
+        read_only_fields = ['created_at', 'invite_token', 'created_by', 'is_used']
+
+
 

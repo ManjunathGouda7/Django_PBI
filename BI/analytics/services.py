@@ -723,3 +723,277 @@ class AuditLogger:
             return None
 
 clear_dataset_cache = DatasetEngine.clear_cache
+
+# ==============================================================================
+# ENTERPRISE EXTENSION ENGINES: SECURITY, GOVERNANCE, PERFORMANCE & PIPELINES
+# ==============================================================================
+
+class TwoFactorAuthEngine:
+    """
+    Pure Python RFC 6238 TOTP (Time-Based One-Time Password) implementation.
+    Works seamlessly without requiring external C extensions.
+    """
+    @staticmethod
+    def generate_base32_secret(length=16):
+        import secrets
+        chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+        return ''.join(secrets.choice(chars) for _ in range(length))
+
+    @staticmethod
+    def generate_totp_code(secret, time_step=30, t0=0):
+        import hmac
+        import hashlib
+        import struct
+        import time
+        import base64
+
+        now = int(time.time())
+        step_count = (now - t0) // time_step
+        counter_bytes = struct.pack('>Q', step_count)
+
+        # Pad base32 string if needed
+        secret_clean = secret.strip().upper().replace(' ', '')
+        padding = (8 - len(secret_clean) % 8) % 8
+        secret_padded = secret_clean + ('=' * padding)
+        key = base64.b32decode(secret_padded, casefold=True)
+
+        hmac_hash = hmac.new(key, counter_bytes, hashlib.sha1).digest()
+        offset = hmac_hash[-1] & 0x0F
+        code_int = struct.unpack('>I', hmac_hash[offset:offset+4])[0] & 0x7FFFFFFF
+        return f"{code_int % 1000000:06d}"
+
+    @staticmethod
+    def verify_totp_code(secret, code, valid_window=1):
+        """Verifies code allowing a ±valid_window time-step tolerance"""
+        import time
+        code_str = str(code).strip()
+        now = int(time.time())
+        for offset in range(-valid_window, valid_window + 1):
+            target_time = now + (offset * 30)
+            step_count = target_time // 30
+            import hmac, hashlib, struct, base64
+            counter_bytes = struct.pack('>Q', step_count)
+            secret_clean = secret.strip().upper().replace(' ', '')
+            padding = (8 - len(secret_clean) % 8) % 8
+            key = base64.b32decode(secret_clean + ('=' * padding), casefold=True)
+            hmac_hash = hmac.new(key, counter_bytes, hashlib.sha1).digest()
+            dyn_offset = hmac_hash[-1] & 0x0F
+            code_int = struct.unpack('>I', hmac_hash[dyn_offset:dyn_offset+4])[0] & 0x7FFFFFFF
+            if f"{code_int % 1000000:06d}" == code_str:
+                return True
+        return False
+
+class SecurityLockoutService:
+    """Manages login attempt tracking and account lockout prevention"""
+    MAX_FAILED_ATTEMPTS = 5
+    LOCKOUT_DURATION_MINUTES = 15
+
+    @classmethod
+    def record_failed_attempt(cls, user_profile):
+        from django.utils import timezone
+        from datetime import timedelta
+        user_profile.failed_login_attempts += 1
+        if user_profile.failed_login_attempts >= cls.MAX_FAILED_ATTEMPTS:
+            user_profile.locked_until = timezone.now() + timedelta(minutes=cls.LOCKOUT_DURATION_MINUTES)
+        user_profile.save(update_fields=['failed_login_attempts', 'locked_until'])
+
+    @classmethod
+    def reset_attempts(cls, user_profile):
+        if user_profile.failed_login_attempts > 0 or user_profile.locked_until:
+            user_profile.failed_login_attempts = 0
+            user_profile.locked_until = None
+            user_profile.save(update_fields=['failed_login_attempts', 'locked_until'])
+
+class SchemaDriftDetector:
+    """Compares incoming dataframe columns with existing DatasetColumn signatures"""
+    @staticmethod
+    def detect_drift(dataset, new_df):
+        from .models import DatasetColumn
+        existing_cols = {col.name: col for col in dataset.columns.all()}
+        new_cols = set(new_df.columns)
+
+        added = list(new_cols - set(existing_cols.keys()))
+        removed = list(set(existing_cols.keys()) - new_cols)
+        type_changes = []
+
+        for col_name in new_cols.intersection(set(existing_cols.keys())):
+            prev_type = existing_cols[col_name].data_type
+            curr_type = 'numeric' if pd.api.types.is_numeric_dtype(new_df[col_name]) else 'datetime' if pd.api.types.is_datetime64_any_dtype(new_df[col_name]) else 'string'
+            if prev_type != curr_type:
+                type_changes.append({'column': col_name, 'from': prev_type, 'to': curr_type})
+
+        has_drift = bool(added or removed or type_changes)
+        return {
+            'has_drift': has_drift,
+            'added_columns': added,
+            'removed_columns': removed,
+            'type_mutations': type_changes,
+            'total_columns': len(new_cols)
+        }
+
+class DataQualityEngine:
+    """Calculates data health score, completeness %, and profiling metrics"""
+    @staticmethod
+    def generate_quality_report(dataset, df):
+        from .models import DataQualityReport
+        total_rows = len(df)
+        total_cols = len(df.columns)
+
+        if total_rows == 0 or total_cols == 0:
+            return DataQualityReport.objects.create(
+                dataset=dataset,
+                health_score=0.0,
+                total_rows=0,
+                total_columns=0,
+                null_percentage=100.0,
+                duplicate_rows_count=0,
+                outlier_count=0,
+                column_metrics={}
+            )
+
+        total_cells = total_rows * total_cols
+        total_nulls = int(df.isnull().sum().sum())
+        null_pct = round((total_nulls / total_cells) * 100.0, 2) if total_cells > 0 else 0.0
+
+        # Duplicate rows
+        duplicate_rows = int(df.duplicated().sum())
+
+        # Numeric outliers (> 3 std dev)
+        outlier_total = 0
+        col_metrics = {}
+        for col in df.columns:
+            null_count = int(df[col].isnull().sum())
+            distinct_count = int(df[col].nunique())
+            outliers = 0
+            if pd.api.types.is_numeric_dtype(df[col]):
+                s = df[col].dropna()
+                if len(s) > 3 and s.std() > 0:
+                    z_scores = np.abs((s - s.mean()) / s.std())
+                    outliers = int((z_scores > 3.0).sum())
+                    outlier_total += outliers
+
+            col_metrics[col] = {
+                'null_count': null_count,
+                'null_pct': round((null_count / total_rows) * 100.0, 1),
+                'distinct_count': distinct_count,
+                'outliers': outliers,
+                'type': 'numeric' if pd.api.types.is_numeric_dtype(df[col]) else 'string'
+            }
+
+        # Calculate composite health score (0 to 100)
+        completeness_score = max(0.0, 100.0 - (null_pct * 1.5))
+        duplication_penalty = min(20.0, (duplicate_rows / total_rows) * 100.0)
+        outlier_penalty = min(15.0, (outlier_total / total_rows) * 50.0)
+
+        health_score = max(0.0, min(100.0, round(completeness_score - duplication_penalty - outlier_penalty, 1)))
+
+        return DataQualityReport.objects.create(
+            dataset=dataset,
+            health_score=health_score,
+            total_rows=total_rows,
+            total_columns=total_cols,
+            null_percentage=null_pct,
+            duplicate_rows_count=duplicate_rows,
+            outlier_count=outlier_total,
+            column_metrics=col_metrics
+        )
+
+class LTTBDownsampler:
+    """
+    Largest-Triangle-Three-Buckets (LTTB) algorithm.
+    Downsamples time series/scatter datasets from 100k+ points to visually identical target threshold.
+    """
+    @staticmethod
+    def downsample(points, threshold=1000):
+        if len(points) <= threshold or threshold < 3:
+            return points
+
+        sampled = [points[0]]
+        bucket_size = (len(points) - 2) / (threshold - 2)
+        a = 0
+
+        for i in range(threshold - 2):
+            # Calculate point average for next bucket (c)
+            c_start = int(np.floor((i + 1) * bucket_size)) + 1
+            c_end = min(int(np.floor((i + 2) * bucket_size)) + 1, len(points))
+            avg_x = np.mean([p[0] for p in points[c_start:c_end]])
+            avg_y = np.mean([p[1] for p in points[c_start:c_end]])
+
+            # Current bucket (b)
+            b_start = int(np.floor(i * bucket_size)) + 1
+            b_end = int(np.floor((i + 1) * bucket_size)) + 1
+
+            point_a_x, point_a_y = points[a]
+            max_area = -1.0
+            max_idx = b_start
+
+            for j in range(b_start, b_end):
+                # Calculate triangle area between Point A, Point B, and Avg C
+                area = abs(
+                    (point_a_x - avg_x) * (points[j][1] - point_a_y) -
+                    (point_a_x - points[j][0]) * (avg_y - point_a_y)
+                ) * 0.5
+                if area > max_area:
+                    max_area = area
+                    max_idx = j
+
+            sampled.append(points[max_idx])
+            a = max_idx
+
+        sampled.append(points[-1])
+        return sampled
+
+class DataImportPipeline:
+    """Multi-stage enterprise dataset ingestion pipeline"""
+    @classmethod
+    def ingest_dataframe(cls, dataset, df, user=None):
+        from .models import DatasetVersion, DatasetColumn
+        # Stage 1: Sanitize columns
+        clean_df = DatasetValidator.sanitize_columns(df)
+
+        # Stage 2: Drift Detection
+        drift_results = SchemaDriftDetector.detect_drift(dataset, clean_df)
+
+        # Stage 3: Sync DatasetColumn metadata
+        for col_name in clean_df.columns:
+            s = clean_df[col_name]
+            dtype = 'numeric' if pd.api.types.is_numeric_dtype(s) else 'datetime' if pd.api.types.is_datetime64_any_dtype(s) else 'string'
+            DatasetColumn.objects.update_or_create(
+                dataset=dataset,
+                name=col_name,
+                defaults={
+                    'data_type': dtype,
+                    'distinct_count': int(s.nunique()),
+                    'null_count': int(s.isnull().sum()),
+                    'min_value': str(s.min()) if not s.empty and not s.isnull().all() else '',
+                    'max_value': str(s.max()) if not s.empty and not s.isnull().all() else '',
+                    'sample_values': s.dropna().head(5).astype(str).tolist()
+                }
+            )
+
+        # Stage 4: Version Snapshot
+        version_count = dataset.versions.count() + 1
+        DatasetVersion.objects.create(
+            dataset=dataset,
+            version_number=version_count,
+            row_count=len(clean_df),
+            column_count=len(clean_df.columns),
+            schema_signature={col: str(clean_df[col].dtype) for col in clean_df.columns}
+        )
+
+        # Stage 5: Quality Report
+        quality_report = DataQualityEngine.generate_quality_report(dataset, clean_df)
+
+        # Stage 6: Update cache
+        _df_cache[dataset.id] = clean_df
+        dataset.status = 'ready'
+        dataset.save(update_fields=['status'])
+
+        return {
+            'status': 'success',
+            'rows': len(clean_df),
+            'columns': len(clean_df.columns),
+            'drift': drift_results,
+            'health_score': quality_report.health_score,
+            'version': version_count
+        }

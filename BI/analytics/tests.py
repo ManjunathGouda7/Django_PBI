@@ -417,6 +417,83 @@ class EnterpriseExpansionFeatureTests(TestCase):
         self.assertTrue(data['db_ok'])
         self.assertTrue(data['cache_ok'])
 
+class EnterpriseArchitectureAndReadinessTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='archuser', password='password123')
+        self.dataset = Dataset.objects.create(name='Arch DS', file_type='sample', is_sample=True, created_by=self.user)
+        self.dashboard = Dashboard.objects.create(title='Arch DB', dataset=self.dataset, created_by=self.user)
+        self.widget = Widget.objects.create(dashboard=self.dashboard, title='Arch Widget', x_axis='Station', y_axis='Power', visual_type='bar')
+
+        # Inject test dataframe
+        from .services import _df_cache
+        self.df_test = pd.DataFrame({
+            'Station': ['St_1', 'St_2', 'St_1', 'St_2'],
+            'Timestamp': ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'],
+            'Power': [120.5, 250.0, 180.2, 310.4]
+        })
+        _df_cache[self.dataset.id] = self.df_test
+
+    def test_two_factor_auth_engine(self):
+        from .services import TwoFactorAuthEngine
+        secret = TwoFactorAuthEngine.generate_base32_secret()
+        self.assertEqual(len(secret), 16)
+        code = TwoFactorAuthEngine.generate_totp_code(secret)
+        self.assertEqual(len(code), 6)
+        self.assertTrue(TwoFactorAuthEngine.verify_totp_code(secret, code))
+
+    def test_security_lockout_service(self):
+        from .services import SecurityLockoutService
+        from .models import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        for _ in range(5):
+            SecurityLockoutService.record_failed_attempt(profile)
+        self.assertTrue(profile.is_locked())
+        SecurityLockoutService.reset_attempts(profile)
+        self.assertFalse(profile.is_locked())
+
+    def test_schema_drift_detector(self):
+        from .services import SchemaDriftDetector
+        new_df = pd.DataFrame({'Station': ['A'], 'NewCol': [123]})
+        drift = SchemaDriftDetector.detect_drift(self.dataset, new_df)
+        self.assertTrue(drift['has_drift'])
+        self.assertIn('NewCol', drift['added_columns'])
+
+    def test_data_quality_engine(self):
+        from .services import DataQualityEngine
+        report = DataQualityEngine.generate_quality_report(self.dataset, self.df_test)
+        self.assertTrue(report.health_score > 0)
+        self.assertEqual(report.total_rows, 4)
+
+    def test_lttb_downsampler(self):
+        from .services import LTTBDownsampler
+        points = [(i, float(i**2)) for i in range(100)]
+        downsampled = LTTBDownsampler.downsample(points, threshold=20)
+        self.assertEqual(len(downsampled), 20)
+
+    def test_data_import_pipeline(self):
+        from .services import DataImportPipeline
+        res = DataImportPipeline.ingest_dataframe(self.dataset, self.df_test, user=self.user)
+        self.assertEqual(res['status'], 'success')
+        self.assertEqual(res['rows'], 4)
+
+    def test_dashboard_bookmarks_and_revisions_api(self):
+        self.client.force_login(self.user)
+        url_bm = reverse('analytics:api_dashboard_bookmarks', kwargs={'dashboard_id': self.dashboard.id})
+        res_bm = self.client.post(url_bm, data='{"name": "Q3 View", "state": {"slicer": "Station_1"}}', content_type='application/json')
+        self.assertEqual(res_bm.status_code, 200)
+
+        url_rev = reverse('analytics:api_dashboard_revisions', kwargs={'dashboard_id': self.dashboard.id})
+        res_rev = self.client.post(url_rev, data='{"action": "snapshot", "change_summary": "Initial baseline"}', content_type='application/json')
+        self.assertEqual(res_rev.status_code, 200)
+
+    def test_prometheus_metrics_api(self):
+        url = reverse('analytics:prometheus_metrics')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"apexbi_datasets_total", response.content)
+
+
 
 
 

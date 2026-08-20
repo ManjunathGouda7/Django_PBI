@@ -36,6 +36,15 @@ class UserProfile(models.Model):
     )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
+    totp_secret = models.CharField(max_length=64, blank=True, null=True)
+    is_totp_enabled = models.BooleanField(default=False)
+    failed_login_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    def is_locked(self):
+        if self.locked_until and self.locked_until > timezone.now():
+            return True
+        return False
 
     def __str__(self):
         return f"{self.user.username} ({self.get_role_display()})"
@@ -480,3 +489,84 @@ class WidgetComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user.username} on {self.widget.title}"
+
+class DashboardBookmark(models.Model):
+    """Saved filter, slicer, and zoom state bookmarks for users"""
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name='saved_bookmarks')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dashboard_bookmarks')
+    name = models.CharField(max_length=150)
+    state = models.JSONField(default=dict, help_text="Stores active slicer values, zoom, and visual states")
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('dashboard', 'user', 'name')
+
+    def __str__(self):
+        return f"{self.name} ({self.dashboard.title})"
+
+class DashboardRevision(models.Model):
+    """Historical layout snapshots for versioning and 1-click rollback"""
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name='revisions')
+    version = models.IntegerField(default=1)
+    snapshot = models.JSONField(help_text="Full serialized widget layout and configuration snapshot")
+    change_summary = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-version']
+
+    def __str__(self):
+        return f"v{self.version} - {self.dashboard.title} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+class DatasetVersion(models.Model):
+    """Historical schema and lineage tracking for datasets"""
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='versions')
+    version_number = models.IntegerField(default=1)
+    row_count = models.IntegerField(default=0)
+    column_count = models.IntegerField(default=0)
+    schema_signature = models.JSONField(default=dict, help_text="Column names, types, null stats")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-version_number']
+
+    def __str__(self):
+        return f"{self.dataset.name} v{self.version_number} ({self.row_count} rows)"
+
+class DataQualityReport(models.Model):
+    """Automated data profiling & quality health scoring (0-100)"""
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='quality_reports')
+    health_score = models.FloatField(default=100.0, help_text="Overall health index from 0 to 100")
+    total_rows = models.IntegerField(default=0)
+    total_columns = models.IntegerField(default=0)
+    null_percentage = models.FloatField(default=0.0)
+    duplicate_rows_count = models.IntegerField(default=0)
+    outlier_count = models.IntegerField(default=0)
+    column_metrics = models.JSONField(default=dict, help_text="Per-column completeness, drift, and uniqueness")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Health Score: {self.health_score:.1f}% for {self.dataset.name}"
+
+class DatasetAccessInvite(models.Model):
+    """Expiring, token-based invitation links for external dataset sharing"""
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE, related_name='access_invites')
+    invite_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    recipient_email = models.EmailField()
+    permission_level = models.CharField(max_length=20, choices=[('view', 'View Only'), ('edit', 'Can Edit')], default='view')
+    can_export = models.BooleanField(default=True)
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"Invite for {self.recipient_email} to {self.dataset.name}"
