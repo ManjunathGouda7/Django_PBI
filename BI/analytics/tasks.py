@@ -140,3 +140,60 @@ def export_dashboard_pdf_task(dashboard_id):
     logger.info(f"Exporting dashboard {dashboard_id} report snapshot.")
     return {'status': 'completed', 'dashboard_id': dashboard_id}
 
+@shared_task
+def async_check_kpi_alerts_task(widget_id):
+    """
+    Background task to evaluate threshold alerts for a widget and dispatch webhooks.
+    """
+    try:
+        from .models import Widget, KPIAlertRule
+        import urllib.request
+        import json
+        
+        widget = Widget.objects.get(pk=widget_id)
+        alerts = KPIAlertRule.objects.filter(widget=widget, is_active=True)
+        if not alerts.exists():
+            return {'status': 'skipped', 'reason': 'No active alerts'}
+
+        df = DatasetEngine.load_dataframe(widget.dashboard.dataset)
+        triggered_count = 0
+
+        for alert in alerts:
+            col = alert.metric_column
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                current_val = float(df[col].sum())
+                triggered = False
+
+                if alert.condition == 'gt' and current_val > alert.threshold_value:
+                    triggered = True
+                elif alert.condition == 'lt' and current_val < alert.threshold_value:
+                    triggered = True
+                elif alert.condition == 'gte' and current_val >= alert.threshold_value:
+                    triggered = True
+                elif alert.condition == 'lte' and current_val <= alert.threshold_value:
+                    triggered = True
+                elif alert.condition == 'eq' and current_val == alert.threshold_value:
+                    triggered = True
+
+                if triggered:
+                    triggered_count += 1
+                    alert.last_triggered = timezone.now()
+                    alert.save(update_fields=['last_triggered'])
+
+                    # Dispatch webhook if provided
+                    if alert.webhook_url:
+                        payload = json.dumps({
+                            'text': f"🚨 **APEX BI Alert Triggered!** Widget: *{widget.title}* | Metric *{col}* = {current_val} ({alert.condition} {alert.threshold_value})"
+                        }).encode('utf-8')
+                        req = urllib.request.Request(alert.webhook_url, data=payload, headers={'Content-Type': 'application/json'})
+                        try:
+                            urllib.request.urlopen(req, timeout=5)
+                        except Exception as ex:
+                            logger.error(f"Webhook dispatch failed for alert {alert.id}: {ex}")
+
+        return {'status': 'success', 'widget_id': widget_id, 'alerts_triggered': triggered_count}
+    except Exception as e:
+        logger.error(f"Error checking KPI alerts for widget {widget_id}: {e}")
+        return {'status': 'error', 'message': str(e)}
+
+

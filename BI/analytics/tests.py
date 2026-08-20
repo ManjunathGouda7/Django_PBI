@@ -345,6 +345,71 @@ class DashboardSharingAndScheduledRefreshAPITests(TestCase):
         self.assertEqual(data['status'], 'success')
         self.assertTrue(len(data['audit_logs']) > 0)
 
+class EnterpriseExpansionFeatureTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='entuser', password='password123')
+        self.dataset = Dataset.objects.create(name='Ent DS', file_type='sample', is_sample=True, created_by=self.user)
+        self.dashboard = Dashboard.objects.create(title='Ent DB', dataset=self.dataset, created_by=self.user)
+        self.widget = Widget.objects.create(dashboard=self.dashboard, title='Ent Widget', x_axis='Station', y_axis='Power', visual_type='bar')
+
+        # Inject test dataframe with Power column into cache
+        from .services import _df_cache
+        df_test = pd.DataFrame({
+            'Station': ['St_1', 'St_2', 'St_1', 'St_2'],
+            'Timestamp': ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'],
+            'Power': [120.5, 250.0, 180.2, 310.4]
+        })
+        _df_cache[self.dataset.id] = df_test
+
+    def test_smart_narrative_engine(self):
+        from .services import DatasetEngine, SmartNarrativeEngine
+        df = DatasetEngine.load_dataframe(self.dataset)
+        bullets = SmartNarrativeEngine.generate_widget_narrative(df, self.widget)
+        self.assertTrue(len(bullets) >= 1)
+        self.assertIn("Power", bullets[0])
+
+    def test_sql_and_rest_connectors(self):
+        from .services import SQLDatabaseConnector
+        df_sql = SQLDatabaseConnector.execute_live_query('sqlite', 'local', 0, '', '', '', 'SELECT 1 as val;')
+        self.assertEqual(len(df_sql), 1)
+        self.assertEqual(df_sql['val'].iloc[0], 1)
+
+    def test_what_if_and_rfm_clustering(self):
+        from .services import DatasetEngine, WhatIfScenarioEngine, CustomerSegmentationEngine
+        df = DatasetEngine.load_dataframe(self.dataset)
+        df_sim, metrics = WhatIfScenarioEngine.simulate_scenario(df, [{'column': 'Power', 'multiplier': 1.10}])
+        self.assertIn('Power', metrics)
+        self.assertTrue(metrics['Power']['simulated_total'] > metrics['Power']['baseline_total'])
+
+        segments = CustomerSegmentationEngine.rfm_clustering(df, 'Station', 'Timestamp', 'Power', n_clusters=2)
+        self.assertTrue(len(segments) > 0)
+        self.assertIn('cluster', segments[0])
+
+    def test_rls_and_dax_parser(self):
+        from .models import RowLevelSecurityRule
+        from .services import DatasetEngine, RowLevelSecurityEngine, DAXFormulaParser
+        rule = RowLevelSecurityRule.objects.create(dataset=self.dataset, user=self.user, column_name='Station', operator='eq', filter_value='St_1')
+        df = DatasetEngine.load_dataframe(self.dataset)
+        df_rls = RowLevelSecurityEngine.apply_rls_filters(df, self.dataset, self.user)
+        self.assertTrue(len(df_rls) <= len(df))
+
+        val_sum = DAXFormulaParser.evaluate_formula(df, "SUM(Power)")
+        self.assertTrue(isinstance(val_sum, float))
+
+    def test_kpi_alerts_and_comments_api(self):
+        url_alert = reverse('analytics:api_kpi_alerts', kwargs={'widget_id': self.widget.id})
+        res_alert = self.client.post(url_alert, data='{"metric_column": "Power", "condition": "gt", "threshold_value": 100}', content_type='application/json')
+        self.assertEqual(res_alert.status_code, 200)
+
+        self.client.force_login(self.user)
+        url_comm = reverse('analytics:api_widget_comments', kwargs={'widget_id': self.widget.id})
+        res_comm = self.client.post(url_comm, data='{"comment_text": "Check outlier peak", "pin_x": 50, "pin_y": 50}', content_type='application/json')
+        self.assertEqual(res_comm.status_code, 200)
+        self.assertEqual(res_comm.json()['status'], 'success')
+
+
+
 
 
 
