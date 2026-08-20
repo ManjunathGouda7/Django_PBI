@@ -147,4 +147,46 @@ def export_executive_pdf_view(request, dashboard_id):
         'widgets': dashboard.widgets.all()
     })
 
+def health_check_view(request):
+    """
+    Production Health Check & Readiness Probe for Load Balancers & Monitoring.
+    """
+    from django.http import JsonResponse
+    from django.db import connection
+    from django.core.cache import cache
+    import shutil
+    from django.conf import settings
+
+    # Check Database Connection
+    db_ok = False
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1;")
+            db_ok = True
+    except Exception:
+        db_ok = False
+
+    # Check Cache Readiness
+    cache_ok = False
+    try:
+        cache.set('_health_test', 1, 10)
+        cache_ok = (cache.get('_health_test') == 1)
+    except Exception:
+        cache_ok = False
+
+    # Free Disk Space check
+    total, used, free = shutil.disk_usage(settings.BASE_DIR)
+    free_mb = free / (1024 * 1024)
+
+    is_healthy = db_ok and cache_ok
+
+    return JsonResponse({
+        'status': 'healthy' if is_healthy else 'unhealthy',
+        'db_ok': db_ok,
+        'cache_ok': cache_ok,
+        'free_disk_mb': round(free_mb, 1),
+        'debug': settings.DEBUG
+    }, status=200 if is_healthy else 503)
+
+
 

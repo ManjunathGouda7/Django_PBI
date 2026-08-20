@@ -143,6 +143,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('THROTTLE_ANON_RATE', '100/hour'),
+        'user': os.getenv('THROTTLE_USER_RATE', '5000/hour'),
+    },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
 }
@@ -191,13 +199,17 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# Ensure log directory exists
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
 # Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '{levelname} {asctime} [{name}:{lineno}] {message}',
             'style': '{',
         },
     },
@@ -206,14 +218,20 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
+        'file_errors': {
+            'class': 'logging.FileHandler',
+            'filename': LOG_DIR / 'django_errors.log',
+            'formatter': 'verbose',
+            'level': 'ERROR',
+        },
     },
     'root': {
-        'handlers': ['console'],
+        'handlers': ['console', 'file_errors'],
         'level': os.getenv('LOG_LEVEL', 'INFO'),
     },
     'loggers': {
         'analytics': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file_errors'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
