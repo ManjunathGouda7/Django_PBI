@@ -1,3 +1,4 @@
+import os
 import json
 import pandas as pd
 import numpy as np
@@ -256,6 +257,8 @@ def datasets_list_api(request):
     elif request.method == 'POST':
         name = request.POST.get('name')
         file_obj = request.FILES.get('file')
+        replace_existing = request.POST.get('replace_existing', 'false').lower() == 'true'
+
         if not name or not file_obj:
             return JsonResponse({'error': 'Name and file are required.'}, status=400)
 
@@ -276,15 +279,24 @@ def datasets_list_api(request):
             return JsonResponse({'error': str(val_err)}, status=400)
 
         user = request.user if request.user.is_authenticated else None
-        dataset = Dataset.objects.create(
-            name=name,
-            file=file_obj,
-            file_type=file_type,
-            created_by=user,
-            is_sample=False
-        )
+
+        existing_dataset = Dataset.objects.filter(name=name).first()
+        if replace_existing and existing_dataset:
+            dataset = existing_dataset
+            dataset.file = file_obj
+            dataset.file_type = file_type
+            dataset.save()
+        else:
+            dataset = Dataset.objects.create(
+                name=name,
+                file=file_obj,
+                file_type=file_type,
+                created_by=user,
+                is_sample=False
+            )
 
         try:
+            DatasetEngine.clear_cache(dataset.id)
             df = DatasetEngine.load_dataframe(dataset)
             dataset.row_count = len(df)
             dataset.column_schema = DatasetEngine.infer_column_schema(df)
@@ -299,11 +311,62 @@ def datasets_list_api(request):
                 }
             })
         except Exception as e:
-            dataset.delete()
+            if not replace_existing:
+                dataset.delete()
             return JsonResponse({'error': f'Failed to process file: {str(e)}'}, status=400)
 
+@csrf_exempt
 def dataset_detail_api(request, dataset_id):
     dataset = get_object_or_404(Dataset, pk=dataset_id)
+
+    if request.method == 'DELETE':
+        ds_name = dataset.name
+        if dataset.file and hasattr(dataset.file, 'path') and os.path.exists(dataset.file.path):
+            try:
+                os.remove(dataset.file.path)
+            except Exception:
+                pass
+        DatasetEngine.clear_cache(dataset.id)
+        dataset.delete()
+        return JsonResponse({'message': f'Dataset "{ds_name}" and file deleted successfully!'})
+
+    if request.method in ['PUT', 'POST'] and request.FILES.get('file'):
+        try:
+            file_obj = request.FILES['file']
+            fname = file_obj.name.lower()
+            if fname.endswith('.json'):
+                dataset.file_type = 'json'
+            elif fname.endswith(('.xlsx', '.xls')):
+                dataset.file_type = 'excel'
+            elif fname.endswith('.csv'):
+                dataset.file_type = 'csv'
+
+            # Remove old file if exists
+            if dataset.file and hasattr(dataset.file, 'path') and os.path.exists(dataset.file.path):
+                try:
+                    os.remove(dataset.file.path)
+                except Exception:
+                    pass
+
+            dataset.file = file_obj
+            dataset.save()
+
+            DatasetEngine.clear_cache(dataset.id)
+            df = DatasetEngine.load_dataframe(dataset)
+            dataset.row_count = len(df)
+            dataset.column_schema = DatasetEngine.infer_column_schema(df)
+            dataset.save()
+
+            return JsonResponse({
+                'message': f'Dataset "{dataset.name}" file replaced and re-indexed successfully!',
+                'id': dataset.id,
+                'name': dataset.name,
+                'row_count': dataset.row_count,
+                'column_schema': dataset.column_schema
+            })
+        except Exception as e:
+            return JsonResponse({'error': f'Failed to update dataset file: {str(e)}'}, status=400)
+
     return JsonResponse({
         'id': dataset.id,
         'name': dataset.name,
@@ -469,8 +532,11 @@ def dashboard_detail_api(request, dashboard_id):
                 db.theme = payload['theme']
             if 'description' in payload:
                 db.description = payload['description']
+            if 'dataset_id' in payload:
+                target_ds = get_object_or_404(Dataset, pk=payload['dataset_id'])
+                db.dataset = target_ds
             db.save()
-            return JsonResponse({'message': 'Dashboard updated'})
+            return JsonResponse({'message': 'Dashboard updated', 'dataset_id': db.dataset_id})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
@@ -1372,4 +1438,4 @@ apexbi_active_alerts_total {alert_count}
 """
     return HttpResponse(metrics_text, content_type='text/plain; version=0.0.4')
 
-
+

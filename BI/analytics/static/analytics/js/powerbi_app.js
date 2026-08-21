@@ -31,6 +31,14 @@ document.addEventListener('DOMContentLoaded', () => {
         datasetSelect: document.getElementById('dataset-select'),
         themeSelect: document.getElementById('theme-select'),
         btnGetData: document.getElementById('btn-get-data'),
+        btnRefreshData: document.getElementById('btn-refresh-data'),
+        btnDeleteDataset: document.getElementById('btn-delete-dataset'),
+        btnUpdateDataset: document.getElementById('btn-update-dataset'),
+        modalUpdateDataset: document.getElementById('modal-update-dataset'),
+        closeModalUpdateData: document.getElementById('close-modal-update-data'),
+        updateDatasetForm: document.getElementById('update-dataset-form'),
+        updateFileInput: document.getElementById('update-file-input'),
+        updateTargetDatasetName: document.getElementById('update-target-dataset-name'),
         btnNewDashboard: document.getElementById('btn-new-dashboard'),
         btnExportPdf: document.getElementById('btn-export-pdf'),
         
@@ -139,11 +147,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Select Change
         elements.dashboardSelect.addEventListener('change', (e) => loadDashboard(e.target.value));
-        elements.datasetSelect.addEventListener('change', (e) => setDataset(e.target.value));
+        elements.datasetSelect.addEventListener('change', (e) => setDataset(e.target.value, true));
         elements.themeSelect.addEventListener('change', (e) => {
             state.userThemeSelected = e.target.value;
             applyTheme(e.target.value);
         });
+
+        if (elements.btnRefreshData) {
+            elements.btnRefreshData.addEventListener('click', async () => {
+                const btn = elements.btnRefreshData;
+                const origHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refreshing...';
+                try {
+                    state.activeSlicers = {};
+                    await fetchDatasets();
+                    if (state.activeDatasetId) {
+                        await setDataset(state.activeDatasetId, true);
+                    }
+                } catch (e) {
+                    console.error("Refresh failed", e);
+                } finally {
+                    btn.innerHTML = origHtml;
+                }
+            });
+        }
+
+        if (elements.btnDeleteDataset) {
+            elements.btnDeleteDataset.addEventListener('click', handleDeleteDataset);
+        }
+
+        if (elements.btnUpdateDataset) {
+            elements.btnUpdateDataset.addEventListener('click', openUpdateDatasetModal);
+        }
+
+        if (elements.closeModalUpdateData) {
+            elements.closeModalUpdateData.addEventListener('click', () => closeModal(elements.modalUpdateDataset));
+        }
+
+        if (elements.updateDatasetForm) {
+            elements.updateDatasetForm.addEventListener('submit', handleDatasetUpdateFileSubmit);
+        }
 
         // Modals
         elements.btnGetData.addEventListener('click', () => openModal(elements.modalGetData));
@@ -478,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function setDataset(datasetId) {
+    async function setDataset(datasetId, syncDashboard = false) {
         state.activeDatasetId = parseInt(datasetId);
         elements.datasetSelect.value = state.activeDatasetId;
         state.activeDataset = state.datasets.find(d => d.id === state.activeDatasetId);
@@ -499,6 +542,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (elements.viewModel && elements.viewModel.style.display !== 'none') {
                 loadModelViewSchema();
+            }
+
+            // Sync active dashboard's dataset if user initiated dataset change
+            if (syncDashboard && state.activeDashboardId) {
+                try {
+                    await fetch(`/api/dashboards/${state.activeDashboardId}/`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dataset_id: state.activeDatasetId })
+                    });
+                    await loadDashboard(state.activeDashboardId, true);
+                } catch (err) {
+                    console.error("Failed syncing dashboard dataset", err);
+                }
             }
         }
     }
@@ -534,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Sync dataset if different
             if (data.dataset && data.dataset.id !== state.activeDatasetId) {
-                setDataset(data.dataset.id);
+                setDataset(data.dataset.id, false);
             }
 
             renderCanvasWidgets(data.widgets || []);
@@ -1250,21 +1307,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const existingWidget = state.activeDashboard ? (state.activeDashboard.widgets || []).find(w => w.id === state.selectedWidgetId) : null;
+        const schemaCols = (state.activeDataset && state.activeDataset.column_schema)
+            ? state.activeDataset.column_schema.map(c => c.name)
+            : [];
 
         let xAxisVal = elements.vizXSelect.value;
         let yAxisVal = elements.vizYSelect.value;
         let groupVal = elements.vizGroupSelect ? elements.vizGroupSelect.value : '';
 
-        if (!xAxisVal && existingWidget) xAxisVal = existingWidget.x_axis;
-        if (!yAxisVal && existingWidget) yAxisVal = existingWidget.y_axis;
-        if (!groupVal && existingWidget) groupVal = existingWidget.group_by;
-
-        if (!xAxisVal && state.activeDataset && state.activeDataset.column_schema) {
-            xAxisVal = state.activeDataset.column_schema[0].name;
+        if (!xAxisVal && existingWidget && schemaCols.includes(existingWidget.x_axis)) {
+            xAxisVal = existingWidget.x_axis;
         }
-        if (!yAxisVal && state.activeDataset && state.activeDataset.column_schema) {
+        if (!yAxisVal && existingWidget && schemaCols.includes(existingWidget.y_axis)) {
+            yAxisVal = existingWidget.y_axis;
+        }
+        if (!groupVal && existingWidget && schemaCols.includes(existingWidget.group_by)) {
+            groupVal = existingWidget.group_by;
+        }
+
+        if (!xAxisVal && schemaCols.length > 0) {
+            xAxisVal = schemaCols[0];
+        }
+        if (!yAxisVal && schemaCols.length > 0) {
             const numCol = state.activeDataset.column_schema.find(c => c.type === 'numeric');
-            yAxisVal = numCol ? numCol.name : (state.activeDataset.column_schema[1] ? state.activeDataset.column_schema[1].name : '');
+            yAxisVal = numCol ? numCol.name : (schemaCols[1] || schemaCols[0]);
         }
 
         const isFullWidthType = ['scatter', 'table', 'line', 'area'].includes(state.activeVisualType);
@@ -1401,12 +1467,99 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDataViewRows();
     };
 
+    // Delete Active Dataset
+    async function handleDeleteDataset() {
+        if (!state.activeDatasetId || !state.activeDataset) {
+            alert("Please select a dataset to delete.");
+            return;
+        }
+        const dsName = state.activeDataset.name;
+        if (!confirm(`⚠️ Are you sure you want to delete dataset "${dsName}"?\n\nThis action will permanently delete the dataset record and its file from server storage.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(`Error deleting dataset: ${data.error}`);
+                return;
+            }
+            alert(data.message || `Dataset "${dsName}" deleted successfully!`);
+            state.activeDatasetId = null;
+            await fetchDatasets();
+            if (state.datasets.length > 0) {
+                await setDataset(state.datasets[0].id, true);
+            } else {
+                elements.datasetSelect.value = '';
+            }
+        } catch (err) {
+            console.error("Failed to delete dataset", err);
+            alert(`Failed deleting dataset: ${err.message}`);
+        }
+    }
+
+    // Open Update Dataset Modal
+    function openUpdateDatasetModal() {
+        if (!state.activeDatasetId || !state.activeDataset) {
+            alert("Please select a dataset to update.");
+            return;
+        }
+        if (elements.updateTargetDatasetName) {
+            elements.updateTargetDatasetName.textContent = `"${state.activeDataset.name}" (ID: ${state.activeDatasetId})`;
+        }
+        openModal(elements.modalUpdateDataset);
+    }
+
+    // Handle Update Dataset File Submission
+    async function handleDatasetUpdateFileSubmit(e) {
+        e.preventDefault();
+        if (!state.activeDatasetId) return;
+
+        const fileObj = elements.updateFileInput.files[0];
+        if (!fileObj) {
+            alert("Please select a replacement file.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileObj);
+
+        try {
+            const res = await fetch(`/api/datasets/${state.activeDatasetId}/`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            closeModal(elements.modalUpdateDataset);
+            if (elements.updateDatasetForm) elements.updateDatasetForm.reset();
+
+            alert(data.message || "Dataset file replaced and re-indexed successfully!");
+            await fetchDatasets();
+            await setDataset(state.activeDatasetId, true);
+        } catch (err) {
+            console.error("Failed updating dataset file", err);
+            alert(`Failed updating dataset file: ${err.message}`);
+        }
+    }
+
     // Upload Dataset Form
     async function handleDatasetUpload(e) {
         e.preventDefault();
         const formData = new FormData();
         formData.append('name', elements.uploadNameInput.value);
         formData.append('file', elements.uploadFileInput.files[0]);
+        const replaceChk = document.getElementById('upload-replace-checkbox');
+        if (replaceChk && replaceChk.checked) {
+            formData.append('replace_existing', 'true');
+        }
 
         try {
             const res = await fetch('/api/datasets/', {
@@ -1422,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal(elements.modalGetData);
             elements.uploadForm.reset();
             await fetchDatasets();
-            setDataset(data.dataset.id);
+            await setDataset(data.dataset.id, true);
             if (window.openDataChatWithPrompt) {
                 window.openDataChatWithPrompt('Summarize this dataset');
             }

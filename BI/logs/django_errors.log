@@ -4,3 +4,27 @@ Traceback (most recent call last):
     'color': w.color
              ^^^^^^^
 AttributeError: 'Widget' object has no attribute 'color'
+ERROR 2026-08-21 18:35:18,916 [django.request:283] Internal Server Error: /api/datasets/12/
+Traceback (most recent call last):
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\exception.py", line 56, in inner
+    response = get_response(request)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\base.py", line 199, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\views\decorators\csrf.py", line 64, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "D:\Manju\PowerBI_Django\bi\analytics\api_views.py", line 323, in dataset_detail_api
+    if dataset.file and hasattr(dataset.file, 'path') and os.path.exists(dataset.file.path):
+                                                          ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+ERROR 2026-08-21 18:35:26,259 [django.request:283] Internal Server Error: /api/datasets/12/
+Traceback (most recent call last):
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\exception.py", line 56, in inner
+    response = get_response(request)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\base.py", line 199, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\views\decorators\csrf.py", line 64, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "D:\Manju\PowerBI_Django\bi\analytics\api_views.py", line 323, in dataset_detail_api
+    if dataset.file and hasattr(dataset.file, 'path') and os.path.exists(dataset.file.path):
+                                                          ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
