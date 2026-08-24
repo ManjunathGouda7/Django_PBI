@@ -559,17 +559,18 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(res.status_code, 403)
         self.assertIn('Public registration is disabled', res.json()['error'])
 
-    def test_admin_registration_allowed(self):
-        admin_user = User.objects.create_superuser(username='secadmin', password='adminpassword')
-        self.client.force_login(admin_user)
-        url = reverse('analytics:api_auth_register')
-        res = self.client.post(url, data=json.dumps({
-            'user_id': 'EMP-2002',
-            'password': 'SecretPassword123',
-            'role': 'analyst'
-        }), content_type='application/json')
-        self.assertEqual(res.status_code, 201)
-        self.assertTrue(User.objects.filter(username='EMP-2002').exists())
+    def test_manjunath_sole_admin_rights(self):
+        # Manjunath user
+        manju_user = User.objects.create_user(username='Manjunath', password='password123')
+        manju_profile = UserProfile.objects.get(user=manju_user)
+        self.assertTrue(manju_profile.is_admin)
+        self.assertEqual(manju_profile.get_role_display(), 'Administrator')
+
+        # Other standard user
+        regular_user = User.objects.create_user(username='john.doe', password='password123')
+        regular_profile = UserProfile.objects.get(user=regular_user)
+        self.assertFalse(regular_profile.is_admin)
+        self.assertEqual(regular_profile.get_role_display(), 'User')
 
     def test_lockout_after_five_failed_attempts(self):
         test_user = User.objects.create_user(username='lockuser', password='correct_pwd')

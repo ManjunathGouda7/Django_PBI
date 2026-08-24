@@ -9,7 +9,7 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     verbose_name = 'User ID & Account Security Settings'
     verbose_name_plural = 'User ID & Account Security Settings'
-    fields = ('login_id', 'role', 'must_change_password', 'failed_login_attempts', 'locked_until', 'is_totp_enabled')
+    fields = ('login_id', 'must_change_password', 'failed_login_attempts', 'locked_until', 'is_totp_enabled')
     extra = 0
 
 try:
@@ -20,11 +20,12 @@ except admin.sites.NotRegistered:
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     """
-    Single unified Admin screen for managing User ID, Password, Role, Active status, and Lock status.
+    Single unified Admin screen for managing User ID, Password, Active status, and Lock status.
+    Administrator rights are reserved for Manjunath.
     """
     inlines = (UserProfileInline,)
-    list_display = ('username', 'get_login_id', 'email', 'get_role', 'get_lock_status', 'must_change_password_status', 'is_staff', 'is_active')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__role')
+    list_display = ('username', 'get_login_id', 'email', 'get_role', 'get_lock_status', 'must_change_password_status', 'is_active')
+    list_filter = ('is_active', 'is_staff', 'is_superuser')
     search_fields = ('username', 'email', 'profile__login_id')
 
     def get_login_id(self, obj):
@@ -34,8 +35,10 @@ class UserAdmin(BaseUserAdmin):
 
     def get_role(self, obj):
         profile = getattr(obj, 'profile', None)
-        return profile.get_role_display() if profile else ('Administrator' if obj.is_superuser else 'Analyst')
-    get_role.short_description = 'Role'
+        if (profile and profile.is_admin) or obj.is_superuser or obj.username.lower() == 'manjunath':
+            return format_html('<span style="color:#38bdf8; font-weight:bold;"><i class="fa fa-shield"></i> Administrator</span>')
+        return format_html('<span style="color:#94a3b8;">User</span>')
+    get_role.short_description = 'Access Level'
 
     def get_lock_status(self, obj):
         profile = getattr(obj, 'profile', None)

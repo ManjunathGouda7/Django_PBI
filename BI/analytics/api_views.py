@@ -69,7 +69,7 @@ def auth_register_api(request):
         return JsonResponse({'error': 'POST method required'}, status=405)
 
     profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
-    is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+    is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
     if not is_admin:
         return JsonResponse({
             'error': 'Public registration is disabled. Please contact your system administrator to obtain access credentials.'
@@ -292,8 +292,8 @@ def dataset_append_data_api(request, dataset_id=None):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication required. Please sign in.'}, status=401)
 
-    profile = getattr(request.user, 'profile', None)
-    is_admin = request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin')
+    profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
+    is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
     if not is_admin:
         return JsonResponse({
             'error': 'Permission Denied: Only Administrators are authorized to convert and append data to the main dataset.'
@@ -398,7 +398,7 @@ def datasets_list_api(request):
         # Handle Admin Append to data/GRL.25MPLA.json
         if append_to_main:
             profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
-            is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+            is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
             if not is_admin:
                 return JsonResponse({'error': 'Permission Denied: Only Administrators can append data to the main dataset.'}, status=403)
 

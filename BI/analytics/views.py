@@ -19,10 +19,11 @@ def index_view(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if profile.must_change_password:
         return redirect('analytics:change_password')
-    role = profile.role if profile else 'admin'
+    is_admin = profile.is_admin
     return render(request, 'analytics/index.html', {
-        'user_role': role,
-        'user_role_display': profile.get_role_display() if profile else 'Administrator'
+        'is_admin': is_admin,
+        'user_role': 'admin' if is_admin else 'user',
+        'user_role_display': 'Administrator' if is_admin else 'User'
     })
 
 def login_view(request):

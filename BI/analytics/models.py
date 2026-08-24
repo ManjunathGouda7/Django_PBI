@@ -37,11 +37,6 @@ user_id_validator = RegexValidator(
 )
 
 class UserProfile(models.Model):
-    ROLE_CHOICES = (
-        ('admin', 'Administrator'),
-        ('analyst', 'Data Analyst'),
-        ('viewer', 'Report Viewer'),
-    )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     login_id = models.CharField(
         max_length=100, 
@@ -51,7 +46,7 @@ class UserProfile(models.Model):
         validators=[user_id_validator],
         help_text="Unique User ID (e.g. john.smith, EMP-1001). No spaces allowed."
     )
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
+    role = models.CharField(max_length=20, default='user', blank=True)
     must_change_password = models.BooleanField(
         default=False, 
         help_text="Force user to reset password on next login."
@@ -60,6 +55,23 @@ class UserProfile(models.Model):
     is_totp_enabled = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def is_admin(self):
+        """Only Manjunath (or superuser) has administrator rights"""
+        username_match = self.user.username.lower() == 'manjunath'
+        login_id_match = bool(self.login_id and self.login_id.lower() == 'manjunath')
+        return username_match or login_id_match or self.user.is_superuser
+
+    def get_role_display(self):
+        return 'Administrator' if self.is_admin else 'User'
+
+    def save(self, *args, **kwargs):
+        if self.is_admin:
+            self.role = 'admin'
+        else:
+            self.role = 'user'
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -614,23 +626,18 @@ def create_or_sync_user_profile(sender, instance, created, **kwargs):
     """
     Ensures every Django User created by an Administrator has an associated
     UserProfile with login_id automatically populated.
+    Only Manjunath receives Administrator rights.
     """
-    if created:
-        UserProfile.objects.get_or_create(
-            user=instance,
-            defaults={
-                'login_id': instance.username,
-                'role': 'admin' if (instance.is_superuser or instance.is_staff) else 'analyst'
-            }
-        )
-    else:
-        profile, _ = UserProfile.objects.get_or_create(
-            user=instance,
-            defaults={
-                'login_id': instance.username,
-                'role': 'admin' if (instance.is_superuser or instance.is_staff) else 'analyst'
-            }
-        )
-        if not profile.login_id:
-            profile.login_id = instance.username
-            profile.save(update_fields=['login_id'])
+    is_manjunath = (instance.username.lower() == 'manjunath' or instance.is_superuser)
+    role_val = 'admin' if is_manjunath else 'user'
+    profile, _ = UserProfile.objects.get_or_create(
+        user=instance,
+        defaults={
+            'login_id': instance.username,
+            'role': role_val
+        }
+    )
+    if not profile.login_id:
+        profile.login_id = instance.username
+    profile.role = role_val
+    profile.save()
