@@ -34,6 +34,17 @@ document.addEventListener('DOMContentLoaded', () => {
         btnRefreshData: document.getElementById('btn-refresh-data'),
         btnDeleteDataset: document.getElementById('btn-delete-dataset'),
         btnUpdateDataset: document.getElementById('btn-update-dataset'),
+        btnAppendData: document.getElementById('btn-append-data'),
+        ribbonBtnAppend: document.getElementById('ribbon-btn-append'),
+        btnOpenAppendModalDv: document.getElementById('btn-open-append-modal-dv'),
+        modalAppendData: document.getElementById('modal-append-data'),
+        closeModalAppendData: document.getElementById('close-modal-append-data'),
+        btnCancelAppend: document.getElementById('btn-cancel-append'),
+        appendDatasetForm: document.getElementById('append-dataset-form'),
+        appendFileInput: document.getElementById('append-file-input'),
+        appendTargetDatasetName: document.getElementById('append-target-dataset-name'),
+        appendStatusMsg: document.getElementById('append-status-msg'),
+        btnSubmitAppend: document.getElementById('btn-submit-append'),
         modalUpdateDataset: document.getElementById('modal-update-dataset'),
         closeModalUpdateData: document.getElementById('close-modal-update-data'),
         updateDatasetForm: document.getElementById('update-dataset-form'),
@@ -224,6 +235,28 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.btnPushMongoJson.addEventListener('click', handlePushMongoJson);
         }
         elements.createDashboardForm.addEventListener('submit', handleCreateDashboard);
+
+        // Append Data Modal Triggers & Form
+        const openAppendModal = () => {
+            if (elements.modalAppendData) {
+                if (elements.appendStatusMsg) {
+                    elements.appendStatusMsg.style.display = 'none';
+                    elements.appendStatusMsg.textContent = '';
+                }
+                if (elements.appendFileInput) elements.appendFileInput.value = '';
+                if (elements.appendTargetDatasetName) {
+                    elements.appendTargetDatasetName.value = state.activeDataset ? state.activeDataset.name : 'GRL - 25MPLA (192.168.100.123)';
+                }
+                openModal(elements.modalAppendData);
+            }
+        };
+
+        if (elements.btnAppendData) elements.btnAppendData.addEventListener('click', openAppendModal);
+        if (elements.ribbonBtnAppend) elements.ribbonBtnAppend.addEventListener('click', openAppendModal);
+        if (elements.btnOpenAppendModalDv) elements.btnOpenAppendModalDv.addEventListener('click', openAppendModal);
+        if (elements.closeModalAppendData) elements.closeModalAppendData.addEventListener('click', () => closeModal(elements.modalAppendData));
+        if (elements.btnCancelAppend) elements.btnCancelAppend.addEventListener('click', () => closeModal(elements.modalAppendData));
+        if (elements.appendDatasetForm) elements.appendDatasetForm.addEventListener('submit', handleAppendDataSubmit);
 
         // Export PDF / Image Snapshot
         elements.btnExportPdf.addEventListener('click', async () => {
@@ -1693,6 +1726,88 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             elements.btnPushMongoJson.disabled = false;
             elements.btnPushMongoJson.innerHTML = `<i class="fa-solid fa-upload"></i> Push data/GRL.25MPLA.json to MongoDB`;
+        }
+    }
+
+    // Append Data Submission Handler (Admin Only)
+    async function handleAppendDataSubmit(e) {
+        e.preventDefault();
+        const file = elements.appendFileInput ? elements.appendFileInput.files[0] : null;
+        if (!file) {
+            alert("Please select a CSV, Excel, or JSON file to append.");
+            return;
+        }
+
+        const btn = elements.btnSubmitAppend;
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting & Appending to GRL.25MPLA.json...`;
+        }
+
+        if (elements.appendStatusMsg) {
+            elements.appendStatusMsg.style.display = 'block';
+            elements.appendStatusMsg.style.background = 'rgba(56,189,248,0.15)';
+            elements.appendStatusMsg.style.color = '#38bdf8';
+            elements.appendStatusMsg.innerHTML = `<i class="fa-solid fa-gear fa-spin"></i> Converting <strong>${file.name}</strong> to JSON & appending to <code>data/GRL.25MPLA.json</code>...`;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const targetId = state.activeDatasetId || 0;
+            const res = await fetch(`/api/datasets/${targetId}/append-data/`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                if (elements.appendStatusMsg) {
+                    elements.appendStatusMsg.style.background = 'rgba(239,68,68,0.15)';
+                    elements.appendStatusMsg.style.color = '#f87171';
+                    elements.appendStatusMsg.innerHTML = `⚠️ ${data.error}`;
+                } else {
+                    alert(`⚠️ ${data.error}`);
+                }
+                return;
+            }
+
+            if (elements.appendStatusMsg) {
+                elements.appendStatusMsg.style.background = 'rgba(34,197,94,0.15)';
+                elements.appendStatusMsg.style.color = '#4ade80';
+                elements.appendStatusMsg.innerHTML = `✅ ${data.message || 'Data converted and appended successfully!'}`;
+            }
+
+            setTimeout(async () => {
+                closeModal(elements.modalAppendData);
+                await fetchDatasets();
+                if (data.dataset_id) {
+                    setDataset(data.dataset_id);
+                } else if (state.activeDatasetId) {
+                    setDataset(state.activeDatasetId);
+                }
+                if (state.activeDashboardId) {
+                    loadDashboard(state.activeDashboardId, true);
+                }
+                alert(`✅ Success: Ingested ${data.added_rows.toLocaleString()} new records!\nTotal dataset rows: ${data.total_rows.toLocaleString()}`);
+            }, 800);
+
+        } catch (err) {
+            console.error("Failed to append data:", err);
+            if (elements.appendStatusMsg) {
+                elements.appendStatusMsg.style.background = 'rgba(239,68,68,0.15)';
+                elements.appendStatusMsg.style.color = '#f87171';
+                elements.appendStatusMsg.innerHTML = `⚠️ Request Failed: ${err.message}`;
+            } else {
+                alert("Failed to append data: " + err.message);
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
         }
     }
 

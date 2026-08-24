@@ -198,6 +198,48 @@ def mongodb_push_json_api(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 @csrf_exempt
+def dataset_append_data_api(request, dataset_id=None):
+    """
+    ADMIN ONLY: Converts an uploaded CSV/Excel/JSON file into JSON format
+    and appends all records directly into data/GRL.25MPLA.json and the active dataset.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required. Please sign in.'}, status=401)
+
+    profile = getattr(request.user, 'profile', None)
+    is_admin = request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin')
+    if not is_admin:
+        return JsonResponse({
+            'error': 'Permission Denied: Only Administrators are authorized to convert and append data to the main dataset.'
+        }, status=403)
+
+    if 'file' not in request.FILES:
+        return JsonResponse({'error': 'No file uploaded. Please select a CSV, Excel, or JSON file.'}, status=400)
+
+    uploaded_file = request.FILES['file']
+    try:
+        res = DatasetEngine.append_data_to_main_json(uploaded_file, dataset_id=dataset_id)
+        if res.get('status') == 'error':
+            return JsonResponse({'error': res.get('message', 'Failed to append data')}, status=400)
+
+        from .services import AuditLogger
+        AuditLogger.log_action(
+            request.user,
+            'DATASET_APPEND',
+            'Dataset',
+            res.get('dataset_id', 0),
+            {'added_rows': res.get('added_rows', 0), 'total_rows': res.get('total_rows', 0), 'filename': uploaded_file.name},
+            request
+        )
+
+        return JsonResponse(res)
+    except Exception as e:
+        return JsonResponse({'error': f'Failed to process file: {str(e)}'}, status=500)
+
+@csrf_exempt
 def mongodb_dataset_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
