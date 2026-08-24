@@ -70,6 +70,18 @@ class DatasetEngine:
         }
 
     @staticmethod
+    def clear_cache(cache_key=None):
+        global _df_cache
+        if cache_key is not None:
+            _df_cache.pop(cache_key, None)
+        else:
+            _df_cache.clear()
+
+    @staticmethod
+    def invalidate_cache(cache_key=None):
+        DatasetEngine.clear_cache(cache_key)
+
+    @staticmethod
     def _get_from_cache(cache_key, current_filepath=None):
         if cache_key not in _df_cache:
             return None

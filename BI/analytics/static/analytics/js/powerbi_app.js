@@ -1632,12 +1632,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // Upload Dataset Form
     async function handleDatasetUpload(e) {
         e.preventDefault();
+        const file = elements.uploadFileInput.files[0];
+        if (!file) {
+            alert("Please select a file to upload.");
+            return;
+        }
+
         const formData = new FormData();
         formData.append('name', elements.uploadNameInput.value);
-        formData.append('file', elements.uploadFileInput.files[0]);
+        formData.append('file', file);
+
+        const appendMainChk = document.getElementById('upload-append-main-check');
+        if (appendMainChk && appendMainChk.checked) {
+            formData.append('append_to_main', 'true');
+        }
+
         const replaceChk = document.getElementById('upload-replace-checkbox');
         if (replaceChk && replaceChk.checked) {
             formData.append('replace_existing', 'true');
+        }
+
+        const submitBtn = elements.uploadForm.querySelector('button[type="submit"]');
+        const origText = submitBtn ? submitBtn.innerHTML : '';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ingesting Dataset...';
         }
 
         try {
@@ -1647,19 +1666,32 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.error) {
-                alert(data.error);
+                alert(`⚠️ ${data.error}`);
                 return;
             }
 
             closeModal(elements.modalGetData);
             elements.uploadForm.reset();
             await fetchDatasets();
-            await setDataset(data.dataset.id, true);
-            if (window.openDataChatWithPrompt) {
-                window.openDataChatWithPrompt('Summarize this dataset');
+            if (data.dataset && data.dataset.id) {
+                await setDataset(data.dataset.id, true);
+            }
+            if (state.activeDashboardId) {
+                await loadDashboard(state.activeDashboardId, true);
+            }
+            if (data.added_rows) {
+                alert(`✅ Successfully converted CSV and appended ${data.added_rows.toLocaleString()} records into data/GRL.25MPLA.json!\nTotal rows: ${data.total_rows.toLocaleString()}`);
+            } else {
+                alert(data.message || "Dataset imported successfully!");
             }
         } catch (err) {
             console.error("Failed uploading dataset", err);
+            alert("Failed uploading dataset: " + err.message);
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = origText;
+            }
         }
     }
 
@@ -1924,8 +1956,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const formData = new FormData();
                 formData.append('name', file.name.replace(/\.[^/.]+$/, ""));
                 formData.append('file', file);
+                if (state.userRole === 'admin') {
+                    formData.append('append_to_main', 'true');
+                }
 
-                appendChatMessage('assistant', `<i class="fa-solid fa-spinner fa-spin text-accent"></i> Uploading <strong>${escapeHtml(file.name)}</strong>...`);
+                appendChatMessage('assistant', `<i class="fa-solid fa-spinner fa-spin text-accent"></i> Converting and ingesting <strong>${escapeHtml(file.name)}</strong>...`);
 
                 try {
                     const response = await fetch('/api/datasets/', {
@@ -1938,6 +1973,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         setDataset(resData.dataset.id);
                         if (chatSelect) chatSelect.value = resData.dataset.id;
                         updateChatDatasetBadge();
+                        if (resData.added_rows) {
+                            appendChatMessage('assistant', `✅ Converted <strong>${escapeHtml(file.name)}</strong> to JSON & merged <strong>${resData.added_rows.toLocaleString()}</strong> records into <code>data/GRL.25MPLA.json</code>. Total rows: <strong>${resData.total_rows.toLocaleString()}</strong>.`);
+                        }
                         sendChatMessage('Summarize this dataset');
                     } else {
                         appendChatMessage('assistant', `⚠️ Failed to upload file: ${resData.error || 'Unknown error'}`);

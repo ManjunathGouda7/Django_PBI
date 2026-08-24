@@ -411,12 +411,20 @@
                     <input type="file" id="upload-file-input" class="pbi-input-file" accept=".csv, .json, .xlsx, .xls"
                         required>
                 </div>
+                {% if user_role == 'admin' or request.user.is_staff or request.user.is_superuser %}
+                <div style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:10px 12px; margin-top: -0.25rem; margin-bottom: 0.75rem; display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" id="upload-append-main-check" name="append_to_main" value="true" checked style="width:16px; height:16px; accent-color:#38bdf8; cursor:pointer;">
+                    <label for="upload-append-main-check" style="font-size:0.82rem; color:#f8fafc; font-weight:600; cursor:pointer; margin-bottom:0;">
+                        <i class="fa-solid fa-file-circle-plus text-info"></i> Convert CSV & Append to Main Dataset (<code>data/GRL.25MPLA.json</code>)
+                    </label>
+                </div>
+                {% endif %}
                 <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top: -0.25rem; margin-bottom: 1rem;">
                     <input type="checkbox" id="upload-replace-checkbox" style="accent-color: var(--pbi-yellow);">
                     <label for="upload-replace-checkbox" style="font-size:0.85rem; cursor:pointer; color:#94a3b8; margin-bottom:0;">Replace dataset if name already exists</label>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Import Dataset
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Ingest Dataset
                 </button>
             </form>
 
