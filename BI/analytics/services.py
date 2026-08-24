@@ -334,28 +334,69 @@ class DatasetEngine:
 
             if x_col and y_col and x_col in df.columns and y_col in df.columns:
                 try:
+                    # Detect metadata columns: board, received power, rectified power, pfo, dut, duty
+                    board_col = next((c for c in df.columns if c.lower() == 'board'), None)
+                    if not board_col:
+                        board_col = next((c for c in df.columns if any(k in c.lower() for k in ['board', 'dut', 'device', 'unit', 'serial', 'sample'])), None)
+
+                    rec_pwr_col = next((c for c in df.columns if 'received' in c.lower() and 'power' in c.lower()), None)
+                    rect_pwr_col = next((c for c in df.columns if 'rectified' in c.lower() and 'power' in c.lower()), None)
+                    pfo_col = next((c for c in df.columns if 'pfo' in c.lower()), None)
+                    dut_col = next((c for c in df.columns if c.lower() == 'dut' or 'dut' in c.lower()), None)
+                    duty_col = next((c for c in df.columns if 'duty' in c.lower()), None)
 
                     group_col = widget.group_by if (widget.group_by and widget.group_by in df.columns) else None
+                    if not group_col and board_col:
+                        group_col = board_col
+
+                    meta_cols = [c for c in [board_col, rec_pwr_col, rect_pwr_col, pfo_col, dut_col, duty_col] if c and c in df.columns]
 
                     colors = ['#00A4EF', '#002060', '#F25022', '#7FBA00', '#FFB900', '#6B69D6', '#E3008C', '#10b981', '#a855f7', '#ec4899']
                     datasets = []
 
+                    def extract_points_from_df(sub, max_pts=3000):
+                        x_s = pd.to_numeric(sub[x_col], errors='coerce').to_numpy()
+                        y_s = pd.to_numeric(sub[y_col], errors='coerce').to_numpy()
+                        v_mask = ~np.isnan(x_s) & ~np.isnan(y_s)
+
+                        x_res = np.round(x_s[v_mask][:max_pts], 2).tolist()
+                        y_res = np.round(y_s[v_mask][:max_pts], 2).tolist()
+                        
+                        b_res = sub[board_col].astype(str).to_numpy()[v_mask][:max_pts].tolist() if board_col and board_col in sub.columns else ['N/A'] * len(x_res)
+                        rp_res = np.round(pd.to_numeric(sub[rec_pwr_col], errors='coerce').to_numpy()[v_mask][:max_pts], 2).tolist() if rec_pwr_col and rec_pwr_col in sub.columns else [None] * len(x_res)
+                        rcp_res = np.round(pd.to_numeric(sub[rect_pwr_col], errors='coerce').to_numpy()[v_mask][:max_pts], 2).tolist() if rect_pwr_col and rect_pwr_col in sub.columns else [None] * len(x_res)
+                        pf_res = np.round(pd.to_numeric(sub[pfo_col], errors='coerce').to_numpy()[v_mask][:max_pts], 2).tolist() if pfo_col and pfo_col in sub.columns else [None] * len(x_res)
+                        dut_res = sub[dut_col].astype(str).to_numpy()[v_mask][:max_pts].tolist() if dut_col and dut_col in sub.columns else [''] * len(x_res)
+                        duty_res = sub[duty_col].astype(str).to_numpy()[v_mask][:max_pts].tolist() if duty_col and duty_col in sub.columns else [''] * len(x_res)
+
+                        pts = []
+                        for x_v, y_v, b_v, rp_v, rcp_v, pf_v, dt_v, dy_v in zip(x_res, y_res, b_res, rp_res, rcp_res, pf_res, dut_res, duty_res):
+                            pt_dict = {
+                                'x': float(x_v),
+                                'y': float(y_v),
+                                'board': str(b_v),
+                            }
+                            if rp_v is not None and not (isinstance(rp_v, float) and np.isnan(rp_v)):
+                                pt_dict['received_power'] = float(rp_v)
+                            if rcp_v is not None and not (isinstance(rcp_v, float) and np.isnan(rcp_v)):
+                                pt_dict['rectified_power'] = float(rcp_v)
+                            if pf_v is not None and not (isinstance(pf_v, float) and np.isnan(pf_v)):
+                                pt_dict['pfo'] = float(pf_v)
+                            if dt_v and dt_v != 'nan':
+                                pt_dict['dut'] = str(dt_v)
+                            if dy_v and dy_v != 'nan':
+                                pt_dict['duty'] = str(dy_v)
+                            pts.append(pt_dict)
+                        return pts
+
                     if group_col:
-                        groups = df[group_col].dropna().unique()[:15]
+                        groups = df[group_col].dropna().unique()[:25]
+                        cols_to_use = list(set([x_col, y_col] + meta_cols))
                         for i, g_val in enumerate(groups):
-                            sub_df = df[df[group_col] == g_val][[x_col, y_col]].dropna()
+                            sub_df = df[df[group_col] == g_val][cols_to_use].dropna(subset=[x_col, y_col])
                             if sub_df.empty:
                                 continue
-                            x_vals = sub_df[x_col].to_numpy().ravel()
-                            y_vals = sub_df[y_col].to_numpy().ravel()
-                            x_nums = pd.to_numeric(x_vals, errors='coerce')
-                            y_nums = pd.to_numeric(y_vals, errors='coerce')
-                            valid_mask = ~np.isnan(x_nums) & ~np.isnan(y_nums)
-
-                            x_arr = np.round(x_nums[valid_mask][:2500], 2).tolist()
-                            y_arr = np.round(y_nums[valid_mask][:2500], 2).tolist()
-
-                            points = [{'x': float(x), 'y': float(y)} for x, y in zip(x_arr, y_arr)]
+                            points = extract_points_from_df(sub_df, max_pts=3000)
                             if points:
                                 datasets.append({
                                     'label': str(g_val),
@@ -363,18 +404,10 @@ class DatasetEngine:
                                     'color': colors[i % len(colors)]
                                 })
                     else:
-                        sub_df = df[[x_col, y_col]].dropna()
+                        cols_to_use = list(set([x_col, y_col] + meta_cols))
+                        sub_df = df[cols_to_use].dropna(subset=[x_col, y_col])
                         if not sub_df.empty:
-                            x_vals = sub_df[x_col].to_numpy().ravel()
-                            y_vals = sub_df[y_col].to_numpy().ravel()
-                            x_nums = pd.to_numeric(x_vals, errors='coerce')
-                            y_nums = pd.to_numeric(y_vals, errors='coerce')
-                            valid_mask = ~np.isnan(x_nums) & ~np.isnan(y_nums)
-
-                            x_arr = np.round(x_nums[valid_mask][:4000], 2).tolist()
-                            y_arr = np.round(y_nums[valid_mask][:4000], 2).tolist()
-
-                            points = [{'x': float(x), 'y': float(y)} for x, y in zip(x_arr, y_arr)]
+                            points = extract_points_from_df(sub_df, max_pts=5000)
                             datasets.append({
                                 'label': f"{y_col} vs {x_col}",
                                 'data': points,
@@ -398,6 +431,7 @@ class DatasetEngine:
                         'x_col': x_col,
                         'y_col': y_col,
                         'group_col': group_col or '',
+                        'board_col': board_col or 'Board',
                         'target_upper': target_upper,
                         'target_lower': target_lower
                     }

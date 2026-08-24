@@ -943,16 +943,26 @@ document.addEventListener('DOMContentLoaded', () => {
         let yOpts = '<option value="">Select Y-Axis / Value Field</option>';
         let gOpts = '<option value="">Select Legend / Group Field (e.g. Board)</option>';
 
+        let detectedBoardCol = '';
+
         schema.forEach(col => {
             let symbol = col.type === 'numeric' ? '#' : (col.type === 'date' ? '📅' : 'Aa');
             xOpts += `<option value="${col.name}">${symbol} ${col.name}</option>`;
             yOpts += `<option value="${col.name}">${symbol} ${col.name}</option>`;
             gOpts += `<option value="${col.name}">${symbol} ${col.name}</option>`;
+            if (!detectedBoardCol && (col.name.toLowerCase().includes('board') || col.name.toLowerCase().includes('dut') || col.name.toLowerCase().includes('device') || col.name.toLowerCase().includes('unit'))) {
+                detectedBoardCol = col.name;
+            }
         });
 
         elements.vizXSelect.innerHTML = xOpts;
         elements.vizYSelect.innerHTML = yOpts;
-        if (elements.vizGroupSelect) elements.vizGroupSelect.innerHTML = gOpts;
+        if (elements.vizGroupSelect) {
+            elements.vizGroupSelect.innerHTML = gOpts;
+            if (detectedBoardCol && !elements.vizGroupSelect.value) {
+                elements.vizGroupSelect.value = detectedBoardCol;
+            }
+        }
     }
 
     // Render Visual Widgets on Canvas
@@ -1092,30 +1102,66 @@ document.addEventListener('DOMContentLoaded', () => {
                             pan: { enabled: true, mode: 'xy' }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(255, 255, 255, 0.96)',
-                            titleColor: '#0f172a',
-                            bodyColor: '#1e293b',
-                            borderColor: '#cbd5e1',
+                            backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                            titleColor: '#38bdf8',
+                            bodyColor: '#f8fafc',
+                            borderColor: 'rgba(56, 189, 248, 0.4)',
                             borderWidth: 1,
-                            padding: 10,
-                            cornerRadius: 4,
+                            padding: 12,
+                            cornerRadius: 8,
                             displayColors: false,
+                            titleFont: { family: 'monospace', size: 13, weight: '700' },
                             bodyFont: { family: 'monospace', size: 12, weight: '600' },
                             callbacks: {
-                                title: function() { return ''; },
+                                title: function(items) {
+                                    if (!items || items.length === 0) return '';
+                                    const raw = items[0].raw || {};
+                                    const boardName = raw.board && raw.board !== 'N/A' ? raw.board : '';
+                                    if (boardName) {
+                                        return `Board: ${boardName}`;
+                                    }
+                                    const groupColName = chartData.group_col || widget.group_by || 'Series';
+                                    const groupVal = items[0].dataset ? items[0].dataset.label : '';
+                                    return `${groupColName}: ${groupVal}`;
+                                },
                                 label: function(context) {
-                                    const groupColName = chartData.group_col || widget.group_by || 'Board';
-                                    const xAxisName = widget.x_axis || 'Rectified Power [W]';
-                                    const yAxisName = widget.y_axis || 'PFO [mW]';
-                                    const boardName = context.dataset.label || 'N/A';
-                                    const xVal = context.parsed.x;
-                                    const yVal = context.parsed.y;
+                                    const raw = context.raw || {};
+                                    const lines = [];
+                                    const boardName = raw.board && raw.board !== 'N/A' ? raw.board : '';
 
-                                    return [
-                                        `           ${groupColName}  ${boardName}`,
-                                        `${xAxisName}  ${xVal}`,
-                                        `        ${yAxisName}  ${yVal}`
-                                    ];
+                                    // 1. Group / Series if different from Board and not a generic vs label
+                                    const groupColName = chartData.group_col || widget.group_by;
+                                    const dsLabel = context.dataset ? context.dataset.label : '';
+                                    if (groupColName && dsLabel && dsLabel !== boardName && !dsLabel.includes(' vs ')) {
+                                        lines.push(`${groupColName}: ${dsLabel}`);
+                                    }
+
+                                    // 2. X-Axis metric
+                                    const xAxisName = chartData.x_col || widget.x_axis || 'X-Axis';
+                                    const xVal = context.parsed.x !== undefined ? context.parsed.x : (raw && raw.x);
+                                    lines.push(`${xAxisName}: ${xVal}`);
+
+                                    // 3. Y-Axis metric
+                                    const yAxisName = chartData.y_col || widget.y_axis || 'Y-Axis';
+                                    const yVal = context.parsed.y !== undefined ? context.parsed.y : (raw && raw.y);
+                                    lines.push(`${yAxisName}: ${yVal}`);
+
+                                    // 4. Received Power (if not already displayed as X or Y)
+                                    if (raw.received_power !== undefined && raw.received_power !== null && !xAxisName.toLowerCase().includes('received') && !yAxisName.toLowerCase().includes('received')) {
+                                        lines.push(`Received Power [W]: ${raw.received_power}`);
+                                    }
+
+                                    // 5. Rectified Power (if not already displayed as X or Y)
+                                    if (raw.rectified_power !== undefined && raw.rectified_power !== null && !xAxisName.toLowerCase().includes('rectified') && !yAxisName.toLowerCase().includes('rectified')) {
+                                        lines.push(`Rectified Power [W]: ${raw.rectified_power}`);
+                                    }
+
+                                    // 6. PFO (if not already displayed as X or Y)
+                                    if (raw.pfo !== undefined && raw.pfo !== null && !xAxisName.toLowerCase().includes('pfo') && !yAxisName.toLowerCase().includes('pfo')) {
+                                        lines.push(`PFO [mW]: ${raw.pfo}`);
+                                    }
+
+                                    return lines;
                                 }
                             }
                         }
