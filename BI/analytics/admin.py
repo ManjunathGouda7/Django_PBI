@@ -1,6 +1,37 @@
 from django.contrib import admin
+from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 from .models import Dataset, Dashboard, Widget, CalculatedMeasure, Organization, ActivityLog, UserProfile
+
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name = 'User Profile & User ID'
+    verbose_name_plural = 'User Profile & User ID'
+    fields = ('login_id', 'role', 'is_totp_enabled', 'failed_login_attempts', 'locked_until')
+    extra = 0
+
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline,)
+    list_display = ('username', 'get_login_id', 'email', 'get_role', 'is_staff', 'is_active')
+    search_fields = ('username', 'email', 'profile__login_id')
+
+    def get_login_id(self, obj):
+        profile = getattr(obj, 'profile', None)
+        return profile.login_id if (profile and profile.login_id) else obj.username
+    get_login_id.short_description = 'User ID'
+
+    def get_role(self, obj):
+        profile = getattr(obj, 'profile', None)
+        return profile.get_role_display() if profile else ('Administrator' if obj.is_superuser else 'Analyst')
+    get_role.short_description = 'Role'
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):

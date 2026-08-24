@@ -571,3 +571,34 @@ class DatasetAccessInvite(models.Model):
 
     def __str__(self):
         return f"Invite for {self.recipient_email} to {self.dataset.name}"
+
+
+# Auto-create or sync UserProfile with login_id on User save
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=User)
+def create_or_sync_user_profile(sender, instance, created, **kwargs):
+    """
+    Ensures every Django User created by an Administrator has an associated
+    UserProfile with login_id automatically populated.
+    """
+    if created:
+        UserProfile.objects.get_or_create(
+            user=instance,
+            defaults={
+                'login_id': instance.username,
+                'role': 'admin' if (instance.is_superuser or instance.is_staff) else 'analyst'
+            }
+        )
+    else:
+        profile, _ = UserProfile.objects.get_or_create(
+            user=instance,
+            defaults={
+                'login_id': instance.username,
+                'role': 'admin' if (instance.is_superuser or instance.is_staff) else 'analyst'
+            }
+        )
+        if not profile.login_id:
+            profile.login_id = instance.username
+            profile.save(update_fields=['login_id'])

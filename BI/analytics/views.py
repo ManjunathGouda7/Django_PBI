@@ -23,60 +23,66 @@ def index_view(request):
 
 def login_view(request):
     """
-    Handles secure user login and registration stored in DB.
-    Validates redirect targets to prevent Open Redirect vulnerabilities.
+    Handles user login using Admin-assigned User ID and Password.
+    Authenticates by username, UserProfile login_id, or case-insensitive matches.
     """
     if request.user.is_authenticated:
         return redirect('analytics:index')
 
     error_msg = None
-    success_msg = None
 
     if request.method == 'POST':
-        action = request.POST.get('action', 'login')
-        username = request.POST.get('username', '').strip()
-        login_id = request.POST.get('user_id', username).strip()
+        user_id = request.POST.get('user_id', '').strip()
+        if not user_id:
+            user_id = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
-        confirm_password = request.POST.get('confirm_password', '').strip()
-        email = request.POST.get('email', '').strip()
-        role = request.POST.get('role', 'admin').strip()
 
-        if action == 'register':
-            if not username or not password:
-                error_msg = "Username and password are required."
-            elif password != confirm_password:
-                error_msg = "Passwords do not match. Please re-enter your passwords."
-            elif User.objects.filter(username=username).exists():
-                error_msg = f"Username '{username}' is already taken. Please choose another."
-            else:
-                user = User.objects.create_user(username=username, password=password, email=email)
-                UserProfile.objects.create(user=user, login_id=username, role=role)
-                login(request, user)
-                logger.info(f"New user registered and logged in: {username}")
-                return redirect('analytics:index')
+        if not user_id or not password:
+            error_msg = "Please enter both your User ID and Password."
+        else:
+            # 1. Direct username authentication
+            user = authenticate(request, username=user_id, password=password)
 
-        elif action == 'login':
-            user = authenticate(request, username=login_id, password=password)
-            if user is None and login_id != username:
-                user = authenticate(request, username=username, password=password)
+            # 2. Look up by UserProfile.login_id
             if user is None:
-                profile = UserProfile.objects.filter(login_id=login_id).select_related('user').first()
+                profile = UserProfile.objects.filter(login_id__iexact=user_id).select_related('user').first()
                 if profile:
                     user = authenticate(request, username=profile.user.username, password=password)
+
+            # 3. Case-insensitive username fallback
+            if user is None:
+                db_user = User.objects.filter(username__iexact=user_id).first()
+                if db_user:
+                    user = authenticate(request, username=db_user.username, password=password)
+
             if user is not None:
-                login(request, user)
-                logger.info(f"User authenticated successfully: {username}")
-                next_url = request.GET.get('next', '/')
-                if not url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
-                    next_url = '/'
-                return redirect(next_url)
+                # Ensure UserProfile exists with login_id set
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                if not profile.login_id:
+                    profile.login_id = user.username
+                    profile.save(update_fields=['login_id'])
+
+                if profile.is_locked():
+                    error_msg = "Account is temporarily locked. Please contact your administrator."
+                elif not user.is_active:
+                    error_msg = "This account has been disabled. Please contact your administrator."
+                else:
+                    if profile.failed_login_attempts > 0:
+                        profile.failed_login_attempts = 0
+                        profile.save(update_fields=['failed_login_attempts'])
+
+                    login(request, user)
+                    logger.info(f"User '{user.username}' (User ID: '{user_id}') logged in successfully.")
+                    next_url = request.GET.get('next', '/')
+                    if not url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
+                        next_url = '/'
+                    return redirect(next_url)
             else:
-                logger.warning(f"Failed login attempt for username: {username}")
-                error_msg = "Invalid username or password. Please check your credentials."
+                logger.warning(f"Failed login attempt for User ID: '{user_id}'")
+                error_msg = "Invalid User ID or Password. Please check your credentials."
 
     return render(request, 'analytics/login.html', {
         'error_msg': error_msg,
-        'success_msg': success_msg
     })
 
 def logout_view(request):

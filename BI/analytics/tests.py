@@ -10,7 +10,9 @@ import pandas as pd
 class AnalyticsModelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='testuser', password='password123')
-        self.profile = UserProfile.objects.create(user=self.user, role='admin')
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user, defaults={'role': 'admin'})
+        self.profile.role = 'admin'
+        self.profile.save()
         self.dataset = Dataset.objects.create(
             name='Test Telemetry Dataset',
             file_type='sample',
@@ -54,31 +56,27 @@ class AnalyticsAuthViewTests(TestCase):
 
     def test_successful_login(self):
         response = self.client.post(reverse('analytics:login'), {
-            'action': 'login',
-            'username': 'john',
+            'user_id': 'john',
             'password': 'secretpassword'
         })
         self.assertEqual(response.status_code, 302)
 
     def test_login_with_admin_assigned_user_id(self):
-        profile = UserProfile.objects.create(user=self.user, login_id='secret-john', role='viewer')
+        self.user.profile.login_id = 'secret-john'
+        self.user.profile.save()
         response = self.client.post(reverse('analytics:login'), {
-            'action': 'login',
-            'user_id': profile.login_id,
+            'user_id': 'secret-john',
             'password': 'secretpassword'
         })
         self.assertEqual(response.status_code, 302)
 
-    def test_registration_with_matching_passwords(self):
+    def test_invalid_credentials_fails(self):
         response = self.client.post(reverse('analytics:login'), {
-            'action': 'register',
-            'username': 'newuser',
-            'password': 'newpassword123',
-            'confirm_password': 'newpassword123',
-            'email': 'newuser@example.com'
+            'user_id': 'unknown_user',
+            'password': 'wrongpassword'
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(User.objects.filter(username='newuser').exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Invalid User ID or Password')
 
 class DataChatEngineTests(TestCase):
     def setUp(self):
