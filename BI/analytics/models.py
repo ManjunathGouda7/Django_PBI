@@ -37,6 +37,13 @@ user_id_validator = RegexValidator(
 )
 
 class UserProfile(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('suspended', 'Suspended'),
+        ('locked', 'Locked'),
+        ('pwd_expired', 'Password Expired'),
+    )
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     login_id = models.CharField(
         max_length=100, 
@@ -46,6 +53,21 @@ class UserProfile(models.Model):
         validators=[user_id_validator],
         help_text="Unique User ID (e.g. john.smith, EMP-1001). No spaces allowed."
     )
+    login_id_lower = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True
+    )
+    employee_name = models.CharField(max_length=150, blank=True, null=True)
+    employee_number = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    department = models.CharField(max_length=100, blank=True, null=True)
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    account_expires_at = models.DateTimeField(blank=True, null=True)
+    password_changed_at = models.DateTimeField(default=timezone.now)
+
     role = models.CharField(max_length=20, default='user', blank=True)
     must_change_password = models.BooleanField(
         default=False, 
@@ -66,7 +88,27 @@ class UserProfile(models.Model):
     def get_role_display(self):
         return 'Administrator' if self.is_admin else 'User'
 
+    def is_account_expired(self):
+        if self.account_expires_at and self.account_expires_at <= timezone.now():
+            return True
+        return False
+
+    def is_password_expired(self, max_days=90):
+        if self.password_changed_at:
+            delta = timezone.now() - self.password_changed_at
+            return delta.days >= max_days
+        return False
+
+    def is_locked(self):
+        if self.status == 'locked' or (self.locked_until and self.locked_until > timezone.now()):
+            return True
+        return False
+
     def save(self, *args, **kwargs):
+        if self.login_id:
+            self.login_id_lower = self.login_id.strip().lower()
+        elif self.user and self.user.username:
+            self.login_id_lower = self.user.username.strip().lower()
         if self.is_admin:
             self.role = 'admin'
         else:
@@ -79,20 +121,28 @@ class UserProfile(models.Model):
             self.login_id = self.login_id.strip()
             if ' ' in self.login_id:
                 raise ValidationError({'login_id': 'User ID cannot contain spaces.'})
-            # Case-insensitive uniqueness check
-            existing = UserProfile.objects.filter(login_id__iexact=self.login_id)
+            existing = UserProfile.objects.filter(login_id_lower=self.login_id.lower())
             if self.pk:
                 existing = existing.exclude(pk=self.pk)
             if existing.exists():
                 raise ValidationError({'login_id': f"User ID '{self.login_id}' already exists (case-insensitive)."})
 
-    def is_locked(self):
-        if self.locked_until and self.locked_until > timezone.now():
-            return True
-        return False
-
     def __str__(self):
-        return f"{self.user.username} ({self.get_role_display()})"
+        return f"{self.user.username} ({'Administrator' if self.is_admin else 'User'})"
+
+class PasswordHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_history')
+    password_hash = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class TwoFactorBackupCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='two_factor_backup_codes')
+    code_hash = models.CharField(max_length=255)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class DatasetTag(models.Model):
     name = models.CharField(max_length=50, unique=True)

@@ -34,10 +34,13 @@
                 <select id="dataset-select" class="pbi-select">
                     <option value="">Loading Datasets...</option>
                 </select>
-                {% if user_role == 'admin' or request.user.is_staff or request.user.is_superuser %}
+                {% if is_admin or user_role == 'admin' %}
                 <button class="btn btn-xs btn-outline-info" id="btn-append-data" title="Convert CSV & Append Data to Main GRL.25MPLA.json (Admin Only)" style="padding: 4px 8px; font-size:0.75rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);">
                     <i class="fa-solid fa-file-circle-plus"></i> Append CSV Data
                 </button>
+                <a href="{% url 'analytics:security_dashboard' %}" class="btn btn-xs btn-outline-success" title="Admin Security Dashboard & User Controls" style="padding: 4px 8px; font-size:0.75rem; color:#4ade80; border-color:rgba(74,222,128,0.4); text-decoration:none;">
+                    <i class="fa-solid fa-shield-halved"></i> Security Dashboard
+                </a>
                 {% endif %}
                 <button class="btn btn-xs btn-outline-warning" id="btn-update-dataset" title="Update / Replace File on Active Dataset" style="padding: 4px 8px; font-size:0.75rem;">
                     <i class="fa-solid fa-file-pen"></i> Replace File

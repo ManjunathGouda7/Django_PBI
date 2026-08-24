@@ -4,8 +4,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.http import HttpResponse
-from .models import Dashboard, Dataset, UserProfile
+from django.utils import timezone
+from .models import Dashboard, Dataset, UserProfile, ActivityLog
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +109,15 @@ def login_view(request):
         'error_msg': error_msg,
     })
 
+from .services import SecurityLockoutService, AuditLogger, PasswordPolicyService, EmployeeIdGeneratorService
+from django.contrib import messages
+from django.db.models import Q
+from datetime import timedelta
+
 @login_required(login_url='/login/')
 def change_password_view(request):
     """
-    Handles mandatory or self-service user password reset.
+    Handles mandatory or self-service user password reset with complexity and history checks.
     """
     error_msg = None
 
@@ -124,25 +129,91 @@ def change_password_view(request):
             error_msg = "Please provide and confirm your new password."
         elif new_pwd != confirm_pwd:
             error_msg = "Passwords do not match. Please try again."
-        elif len(new_pwd) < 6:
-            error_msg = "Password must be at least 6 characters long."
         else:
-            user = request.user
-            user.set_password(new_pwd)
-            user.save()
-            profile = getattr(user, 'profile', None)
-            if profile and profile.must_change_password:
-                profile.must_change_password = False
-                profile.save(update_fields=['must_change_password'])
+            complexity_errs = PasswordPolicyService.validate_complexity(new_pwd)
+            if complexity_errs:
+                error_msg = " ".join(complexity_errs)
+            elif PasswordPolicyService.check_password_history(request.user, new_pwd):
+                error_msg = "You cannot reuse any of your last 5 passwords. Please choose a new password."
+            else:
+                user = request.user
+                user.set_password(new_pwd)
+                user.save()
+                PasswordPolicyService.record_password_change(user, new_pwd)
 
-            from django.contrib.auth import update_session_auth_hash
-            update_session_auth_hash(request, user)
-            AuditLogger.log_action(user, 'PASSWORD_CHANGE', 'User', user.id, {}, request)
-            logger.info(f"Password changed successfully for user '{user.username}'")
-            return redirect('analytics:index')
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, user)
+                AuditLogger.log_action(user, 'PASSWORD_CHANGE', 'User', user.id, {}, request)
+                logger.info(f"Password changed successfully for user '{user.username}'")
+                return redirect('analytics:index')
 
     return render(request, 'analytics/change_password.html', {
         'error_msg': error_msg,
+    })
+
+@login_required(login_url='/login/')
+def security_dashboard_view(request):
+    """
+    Administrator Security & Account Monitoring Dashboard.
+    Restricted to Administrator (Manjunath / superuser).
+    """
+    profile = getattr(request.user, 'profile', None)
+    is_admin = profile.is_admin if profile else request.user.is_superuser
+    if not is_admin:
+        messages.error(request, "Permission Denied: Only Administrators can access the Security Dashboard.")
+        return redirect('analytics:index')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        target_id = request.POST.get('user_id')
+        target_profile = UserProfile.objects.filter(pk=target_id).first()
+        if target_profile:
+            if action == 'unlock':
+                target_profile.status = 'active'
+                target_profile.failed_login_attempts = 0
+                target_profile.locked_until = None
+                target_profile.save()
+                AuditLogger.log_action(request.user, 'USER_UNLOCK', 'User', target_profile.user.id, {}, request)
+            elif action == 'suspend':
+                target_profile.status = 'suspended'
+                target_profile.user.is_active = False
+                target_profile.user.save(update_fields=['is_active'])
+                target_profile.save()
+                AuditLogger.log_action(request.user, 'USER_SUSPEND', 'User', target_profile.user.id, {}, request)
+            elif action == 'activate':
+                target_profile.status = 'active'
+                target_profile.user.is_active = True
+                target_profile.user.save(update_fields=['is_active'])
+                target_profile.save()
+                AuditLogger.log_action(request.user, 'USER_ACTIVATE', 'User', target_profile.user.id, {}, request)
+            elif action == 'force_pwd_reset':
+                target_profile.must_change_password = True
+                target_profile.save(update_fields=['must_change_password'])
+                AuditLogger.log_action(request.user, 'USER_FORCE_PWD_RESET', 'User', target_profile.user.id, {}, request)
+
+    total_users = UserProfile.objects.count()
+    active_users = UserProfile.objects.filter(status='active', user__is_active=True).count()
+    suspended_users = UserProfile.objects.filter(Q(status='suspended') | Q(user__is_active=False)).count()
+    locked_users = UserProfile.objects.filter(Q(status='locked') | Q(locked_until__gt=timezone.now())).count()
+    
+    threshold_75_days = timezone.now() - timedelta(days=75)
+    pwd_expiring_soon = UserProfile.objects.filter(password_changed_at__lte=threshold_75_days).count()
+
+    recent_logins = ActivityLog.objects.filter(action_type__in=['LOGIN_SUCCESS', 'API_LOGIN_SUCCESS']).select_related('user').order_by('-timestamp')[:15]
+    recent_failures = ActivityLog.objects.filter(action_type__in=['LOGIN_FAILED', 'API_LOGIN_FAILED']).order_by('-timestamp')[:15]
+    all_profiles = UserProfile.objects.select_related('user').order_by('-user__date_joined')
+
+    return render(request, 'analytics/security_dashboard.html', {
+        'total_users': total_users,
+        'active_users': active_users,
+        'suspended_users': suspended_users,
+        'locked_users': locked_users,
+        'pwd_expiring_soon': pwd_expiring_soon,
+        'recent_logins': recent_logins,
+        'recent_failures': recent_failures,
+        'all_profiles': all_profiles,
+        'user_role': 'admin',
+        'is_admin': True,
     })
 
 def logout_view(request):

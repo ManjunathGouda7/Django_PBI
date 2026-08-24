@@ -627,6 +627,42 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         profile.refresh_from_db()
         self.assertFalse(profile.must_change_password)
 
+    def test_auto_employee_user_id_generation(self):
+        from .services import EmployeeIdGeneratorService
+        gen_id1 = EmployeeIdGeneratorService.generate_next_id()
+        self.assertTrue(gen_id1.startswith('EMP-'))
+
+    def test_password_complexity_rules(self):
+        from .services import PasswordPolicyService
+        # Simple password fails
+        errs = PasswordPolicyService.validate_complexity('simple')
+        self.assertTrue(len(errs) > 0)
+
+        # Complex password passes
+        errs2 = PasswordPolicyService.validate_complexity('ComplexPass99!')
+        self.assertEqual(len(errs2), 0)
+
+    def test_security_dashboard_access_and_unlock(self):
+        admin_user = User.objects.create_user(username='Manjunath', password='ComplexPass99!')
+        self.client.force_login(admin_user)
+
+        target_user = User.objects.create_user(username='targetlock', password='ComplexPass99!')
+        target_profile = UserProfile.objects.get(user=target_user)
+        target_profile.status = 'locked'
+        target_profile.failed_login_attempts = 5
+        target_profile.save()
+
+        sec_url = reverse('analytics:security_dashboard')
+        res = self.client.get(sec_url)
+        self.assertEqual(res.status_code, 200)
+
+        # Admin unlocks target
+        res_post = self.client.post(sec_url, {'action': 'unlock', 'user_id': target_profile.id})
+        self.assertEqual(res_post.status_code, 200)
+        target_profile.refresh_from_db()
+        self.assertEqual(target_profile.status, 'active')
+        self.assertEqual(target_profile.failed_login_attempts, 0)
+
 
 
 

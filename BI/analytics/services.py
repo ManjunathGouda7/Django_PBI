@@ -1040,6 +1040,113 @@ class SecurityLockoutService:
             }
         return {'is_locked': False, 'remaining_minutes': 0}
 
+class EmployeeIdGeneratorService:
+    """Generates sequential Employee User IDs (e.g. EMP-1001, EMP-1002)"""
+    @staticmethod
+    def generate_next_id(prefix="EMP-", start_seq=1001):
+        from .models import UserProfile
+        from django.db.models import Q
+        import re
+
+        profiles = UserProfile.objects.filter(
+            Q(login_id__startswith=prefix) | Q(employee_number__startswith=prefix)
+        )
+        max_seq = start_seq - 1
+        for p in profiles:
+            target = p.employee_number or p.login_id or ""
+            match = re.search(r'EMP-(\d+)', target, re.IGNORECASE)
+            if match:
+                try:
+                    num = int(match.group(1))
+                    if num > max_seq:
+                        max_seq = num
+                except ValueError:
+                    pass
+
+        next_seq = max_seq + 1
+        candidate = f"{prefix}{next_seq}"
+        while UserProfile.objects.filter(Q(login_id_lower=candidate.lower()) | Q(employee_number__iexact=candidate)).exists():
+            next_seq += 1
+            candidate = f"{prefix}{next_seq}"
+        return candidate
+
+class PasswordPolicyService:
+    """Enforces enterprise password complexity rules, expiration, and history retention"""
+    MIN_LENGTH = 8
+    MAX_HISTORY = 5
+
+    @classmethod
+    def validate_complexity(cls, password):
+        import re
+        errors = []
+        if len(password) < cls.MIN_LENGTH:
+            errors.append(f"Password must be at least {cls.MIN_LENGTH} characters long.")
+        if not re.search(r'[A-Z]', password):
+            errors.append("Password must contain at least one uppercase letter (A-Z).")
+        if not re.search(r'[a-z]', password):
+            errors.append("Password must contain at least one lowercase letter (a-z).")
+        if not re.search(r'[0-9]', password):
+            errors.append("Password must contain at least one digit (0-9).")
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?]', password):
+            errors.append("Password must contain at least one special character (e.g. !@#$%^&*).")
+        
+        common_list = {'password', '12345678', 'admin123', 'password123', 'welcome123', 'qwerty123'}
+        if password.lower() in common_list:
+            errors.append("Password is too simple or commonly used.")
+
+        return errors
+
+    @classmethod
+    def check_password_history(cls, user, new_raw_password):
+        from .models import PasswordHistory
+        from django.contrib.auth.hashers import check_password
+
+        if check_password(new_raw_password, user.password):
+            return True
+
+        history_entries = PasswordHistory.objects.filter(user=user).order_by('-created_at')[:cls.MAX_HISTORY]
+        for entry in history_entries:
+            if check_password(new_raw_password, entry.password_hash):
+                return True
+        return False
+
+    @classmethod
+    def record_password_change(cls, user, new_raw_password):
+        from .models import PasswordHistory, UserProfile
+        from django.utils import timezone
+
+        PasswordHistory.objects.create(
+            user=user,
+            password_hash=user.password
+        )
+
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.password_changed_at = timezone.now()
+        profile.status = 'active'
+        profile.must_change_password = False
+        profile.save(update_fields=['password_changed_at', 'status', 'must_change_password'])
+
+        old_ids = list(PasswordHistory.objects.filter(user=user).order_by('-created_at').values_list('id', flat=True)[10:])
+        if old_ids:
+            PasswordHistory.objects.filter(id__in=old_ids).delete()
+
+class RbacPermissionService:
+    """Manages Django Groups and granular Permission assignments"""
+    GROUPS = {
+        'Super Administrator': 'Full system control and configuration.',
+        'Administrator': 'User management, dataset ingestion, and security dashboard access.',
+        'Data Engineer': 'Dataset upload, schema drift management, and connection configuration.',
+        'Data Analyst': 'Dashboard creation, widget customization, and measure definition.',
+        'Report Viewer': 'Read-only access to published dashboards and reports.',
+        'Auditor': 'Read-only access to audit logs and activity tracking.'
+    }
+
+    @classmethod
+    def seed_groups(cls):
+        from django.contrib.auth.models import Group
+        for group_name in cls.GROUPS.keys():
+            Group.objects.get_or_create(name=group_name)
+
 class SchemaDriftDetector:
     """Compares incoming dataframe columns with existing DatasetColumn signatures"""
     @staticmethod
