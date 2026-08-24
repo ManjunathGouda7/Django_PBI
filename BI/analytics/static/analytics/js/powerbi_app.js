@@ -468,8 +468,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openModal(modal) { modal.classList.add('active'); }
-    function closeModal(modal) { modal.classList.remove('active'); }
+    function openModal(modal) {
+        if (!modal) return;
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+    }
+    function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    }
 
     // API Calls
     async function fetchDatasets() {
