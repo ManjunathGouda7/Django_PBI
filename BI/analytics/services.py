@@ -1007,9 +1007,18 @@ class SecurityLockoutService:
         from django.utils import timezone
         from datetime import timedelta
         user_profile.failed_login_attempts += 1
+        is_locked_now = False
         if user_profile.failed_login_attempts >= cls.MAX_FAILED_ATTEMPTS:
             user_profile.locked_until = timezone.now() + timedelta(minutes=cls.LOCKOUT_DURATION_MINUTES)
+            is_locked_now = True
         user_profile.save(update_fields=['failed_login_attempts', 'locked_until'])
+        remaining = max(0, cls.MAX_FAILED_ATTEMPTS - user_profile.failed_login_attempts)
+        return {
+            'is_locked': is_locked_now,
+            'failed_attempts': user_profile.failed_login_attempts,
+            'remaining_attempts': remaining,
+            'locked_until': user_profile.locked_until
+        }
 
     @classmethod
     def reset_attempts(cls, user_profile):
@@ -1017,6 +1026,19 @@ class SecurityLockoutService:
             user_profile.failed_login_attempts = 0
             user_profile.locked_until = None
             user_profile.save(update_fields=['failed_login_attempts', 'locked_until'])
+
+    @classmethod
+    def get_lockout_info(cls, user_profile):
+        if user_profile and user_profile.is_locked():
+            from django.utils import timezone
+            remaining_seconds = max(0, int((user_profile.locked_until - timezone.now()).total_seconds()))
+            remaining_minutes = max(1, int(remaining_seconds / 60))
+            return {
+                'is_locked': True,
+                'remaining_minutes': remaining_minutes,
+                'locked_until': user_profile.locked_until
+            }
+        return {'is_locked': False, 'remaining_minutes': 0}
 
 class SchemaDriftDetector:
     """Compares incoming dataframe columns with existing DatasetColumn signatures"""

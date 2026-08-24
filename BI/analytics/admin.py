@@ -7,9 +7,9 @@ from .models import Dataset, Dashboard, Widget, CalculatedMeasure, Organization,
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
     can_delete = False
-    verbose_name = 'User Profile & User ID'
-    verbose_name_plural = 'User Profile & User ID'
-    fields = ('login_id', 'role', 'is_totp_enabled', 'failed_login_attempts', 'locked_until')
+    verbose_name = 'User ID & Account Security Settings'
+    verbose_name_plural = 'User ID & Account Security Settings'
+    fields = ('login_id', 'role', 'must_change_password', 'failed_login_attempts', 'locked_until', 'is_totp_enabled')
     extra = 0
 
 try:
@@ -19,8 +19,12 @@ except admin.sites.NotRegistered:
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    """
+    Single unified Admin screen for managing User ID, Password, Role, Active status, and Lock status.
+    """
     inlines = (UserProfileInline,)
-    list_display = ('username', 'get_login_id', 'email', 'get_role', 'is_staff', 'is_active')
+    list_display = ('username', 'get_login_id', 'email', 'get_role', 'get_lock_status', 'must_change_password_status', 'is_staff', 'is_active')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__role')
     search_fields = ('username', 'email', 'profile__login_id')
 
     def get_login_id(self, obj):
@@ -33,12 +37,65 @@ class UserAdmin(BaseUserAdmin):
         return profile.get_role_display() if profile else ('Administrator' if obj.is_superuser else 'Analyst')
     get_role.short_description = 'Role'
 
-@admin.register(UserProfile)
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('login_id', 'user', 'role', 'is_totp_enabled')
-    list_filter = ('role', 'is_totp_enabled')
-    search_fields = ('login_id', 'user__username', 'user__email')
-    autocomplete_fields = ('user',)
+    def get_lock_status(self, obj):
+        profile = getattr(obj, 'profile', None)
+        if profile and profile.is_locked():
+            return format_html('<span style="color:#ef4444; font-weight:bold;">🔒 Locked ({} tries)</span>', profile.failed_login_attempts)
+        elif profile and profile.failed_login_attempts > 0:
+            return format_html('<span style="color:#f59e0b;">⚠️ {} failed</span>', profile.failed_login_attempts)
+        return format_html('<span style="color:#22c55e;">✓ Normal</span>')
+    get_lock_status.short_description = 'Lock Status'
+
+    def must_change_password_status(self, obj):
+        profile = getattr(obj, 'profile', None)
+        if profile and profile.must_change_password:
+            return format_html('<span style="color:#f59e0b; font-weight:bold;">Yes (Pending)</span>')
+        return format_html('<span style="color:#94a3b8;">No</span>')
+    must_change_password_status.short_description = 'Reset on Next Login'
+
+    def save_model(self, request, obj, form, change):
+        is_new = obj.pk is None
+        old_active = None
+        if not is_new:
+            orig = User.objects.filter(pk=obj.pk).first()
+            old_active = orig.is_active if orig else None
+
+        super().save_model(request, obj, form, change)
+
+        profile, _ = UserProfile.objects.get_or_create(user=obj)
+        if not profile.login_id:
+            profile.login_id = obj.username
+            profile.save(update_fields=['login_id'])
+
+        from .services import AuditLogger
+        if is_new:
+            AuditLogger.log_action(request.user, 'USER_CREATE', 'User', obj.id, {
+                'username': obj.username,
+                'email': obj.email,
+                'is_active': obj.is_active
+            }, request)
+        elif old_active is not None and old_active != obj.is_active:
+            action = 'USER_ENABLE' if obj.is_active else 'USER_DISABLE'
+            AuditLogger.log_action(request.user, action, 'User', obj.id, {
+                'username': obj.username,
+                'is_active': obj.is_active
+            }, request)
+
+    def save_formset(self, request, form, formset, change):
+        super().save_formset(request, form, formset, change)
+        from .services import AuditLogger
+        if formset.model == UserProfile:
+            for inline_form in formset.forms:
+                if inline_form.has_changed():
+                    changed = inline_form.changed_data
+                    profile_obj = inline_form.instance
+                    AuditLogger.log_action(request.user, 'USER_PROFILE_UPDATE', 'UserProfile', profile_obj.id, {
+                        'user': profile_obj.user.username,
+                        'changed_fields': changed,
+                        'login_id': profile_obj.login_id,
+                        'role': profile_obj.role,
+                        'must_change_password': profile_obj.must_change_password
+                    }, request)
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):

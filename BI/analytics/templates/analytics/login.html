@@ -173,7 +173,8 @@
                 <i class="fa-solid fa-chart-column"></i>
                 <span>Power BI Studio</span>
             </div>
-            <div class="login-subtitle">Sign in to access telemetry dashboards & report analytics</div>
+            <div class="login-subtitle">Administrator & User Portal</div>
+            <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">Credentials are assigned and managed by an administrator.</div>
         </div>
 
         {% if error_msg %}
@@ -189,14 +190,14 @@
             <div class="auth-form-group">
                 <label for="login-userid"><i class="fa-solid fa-user"></i> User ID</label>
                 <div class="auth-input-wrapper">
-                    <input type="text" id="login-userid" name="user_id" class="auth-input" placeholder="Enter your user ID" required autofocus autocomplete="username">
+                    <input type="text" id="login-userid" name="user_id" class="auth-input" placeholder="e.g. john.smith, EMP-1001" required autofocus autocomplete="username">
                 </div>
             </div>
 
             <div class="auth-form-group">
                 <label for="login-password"><i class="fa-solid fa-lock"></i> Password</label>
                 <div class="auth-input-wrapper">
-                    <input type="password" id="login-password" name="password" class="auth-input" placeholder="Enter your password" required autocomplete="current-password">
+                    <input type="password" id="login-password" name="password" class="auth-input" placeholder="Enter assigned password" required autocomplete="current-password">
                     <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility()" title="Toggle password visibility">
                         <i class="fa-solid fa-eye" id="pwd-toggle-icon"></i>
                     </button>
@@ -204,13 +205,13 @@
             </div>
 
             <button type="submit" class="btn-auth-submit" id="btn-login-submit">
-                <i class="fa-solid fa-right-to-bracket"></i> Sign In
+                <i class="fa-solid fa-right-to-bracket"></i> Login to Portal
             </button>
         </form>
 
         <div class="login-footer-hint">
             <i class="fa-solid fa-shield-halved"></i>
-            <span>User accounts are managed by administrators.</span>
+            <span>Access restricted to authorized personnel. Contact an administrator for new access or password resets.</span>
         </div>
     </div>
 </div>

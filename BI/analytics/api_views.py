@@ -61,52 +61,135 @@ class WidgetViewSet(viewsets.ModelViewSet):
 # Auth APIs
 @csrf_exempt
 def auth_register_api(request):
+    """
+    User Registration Endpoint.
+    Public registration is DISABLED. Only authenticated Administrators can register accounts.
+    """
     if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
+    profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
+    is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+    if not is_admin:
+        return JsonResponse({
+            'error': 'Public registration is disabled. Please contact your system administrator to obtain access credentials.'
+        }, status=403)
+
     try:
         data = json.loads(request.body)
         username = data.get('username', '').strip()
-        password = data.get('password', '').strip()
+        login_id = data.get('user_id', username).strip()
+        password = data.get('password', '')  # DO NOT strip passwords
         email = data.get('email', '').strip()
+        role = data.get('role', 'analyst')
+        must_change = bool(data.get('must_change_password', False))
 
-        if not username or not password:
-            return JsonResponse({'error': 'Username and password required'}, status=400)
-        if User.objects.filter(username=username).exists():
-            return JsonResponse({'error': 'Username already exists'}, status=400)
+        if not login_id or not password:
+            return JsonResponse({'error': 'User ID and password are required.'}, status=400)
+        
+        # User ID validation
+        if ' ' in login_id:
+            return JsonResponse({'error': 'User ID cannot contain spaces.'}, status=400)
+        
+        import re
+        if not re.match(r'^[a-zA-Z0-9._-]+$', login_id):
+            return JsonResponse({'error': 'User ID may only contain letters, numbers, dots, hyphens, and underscores.'}, status=400)
 
-        user = User.objects.create_user(username=username, password=password, email=email)
-        UserProfile.objects.get_or_create(user=user, defaults={'login_id': username})
-        login(request, user)
+        if User.objects.filter(username__iexact=login_id).exists() or UserProfile.objects.filter(login_id__iexact=login_id).exists():
+            return JsonResponse({'error': f"User ID '{login_id}' already exists."}, status=400)
+
+        user = User.objects.create_user(username=login_id, password=password, email=email)
+        user_prof, _ = UserProfile.objects.get_or_create(user=user)
+        user_prof.login_id = login_id
+        user_prof.role = role
+        user_prof.must_change_password = must_change
+        user_prof.save()
+
+        from .services import AuditLogger
+        AuditLogger.log_action(request.user, 'USER_CREATE', 'User', user.id, {'user_id': login_id, 'role': role}, request)
+
         return JsonResponse({
-            'message': 'Registration successful',
-            'user': {'id': user.id, 'username': user.username, 'user_id': username, 'email': user.email}
-        })
+            'message': f"User '{login_id}' created successfully.",
+            'user': {'id': user.id, 'username': user.username, 'user_id': login_id, 'email': user.email, 'role': role}
+        }, status=201)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
 @csrf_exempt
 def auth_login_api(request):
+    """
+    API Login Endpoint.
+    Validates credentials, checks account active/lock status, enforces SecurityLockoutService.
+    """
     if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
+        return JsonResponse({'error': 'POST method required'}, status=405)
     try:
         data = json.loads(request.body)
         username = data.get('username', '').strip()
         login_id = data.get('user_id', username).strip()
-        password = data.get('password', '').strip()
+        password = data.get('password', '')  # DO NOT strip passwords
 
+        if not login_id or not password:
+            return JsonResponse({'error': 'User ID and Password are required.'}, status=400)
+
+        target_profile = UserProfile.objects.filter(login_id__iexact=login_id).select_related('user').first()
+        if not target_profile:
+            target_user = User.objects.filter(username__iexact=login_id).first()
+            if target_user:
+                target_profile, _ = UserProfile.objects.get_or_create(user=target_user)
+
+        from .services import SecurityLockoutService, AuditLogger
+        if target_profile and target_profile.is_locked():
+            lock_info = SecurityLockoutService.get_lockout_info(target_profile)
+            return JsonResponse({
+                'error': f"Account is temporarily locked. Please try again in {lock_info['remaining_minutes']} minute(s) or contact your administrator."
+            }, status=403)
+
+        # Authenticate
         user = authenticate(request, username=login_id, password=password)
+        if user is None and target_profile:
+            user = authenticate(request, username=target_profile.user.username, password=password)
         if user is None:
-            profile = UserProfile.objects.filter(login_id=login_id).select_related('user').first()
-            if profile:
-                user = authenticate(request, username=profile.user.username, password=password)
+            db_user = User.objects.filter(username__iexact=login_id).first()
+            if db_user:
+                user = authenticate(request, username=db_user.username, password=password)
+
         if user is not None:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            if not profile.login_id:
+                profile.login_id = user.username
+                profile.save(update_fields=['login_id'])
+
+            if not user.is_active:
+                return JsonResponse({'error': 'This account has been disabled. Please contact your administrator.'}, status=403)
+
+            SecurityLockoutService.reset_attempts(profile)
             login(request, user)
+            AuditLogger.log_action(user, 'API_LOGIN_SUCCESS', 'User', user.id, {'user_id': login_id}, request)
+
             return JsonResponse({
                 'message': 'Login successful',
-                'user': {'id': user.id, 'username': user.username, 'user_id': login_id, 'email': user.email}
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'user_id': profile.login_id,
+                    'email': user.email,
+                    'role': profile.role,
+                    'must_change_password': profile.must_change_password
+                }
             })
         else:
-            return JsonResponse({'error': 'Invalid username or password'}, status=401)
+            if target_profile:
+                lock_res = SecurityLockoutService.record_failed_attempt(target_profile)
+                if lock_res['is_locked']:
+                    err_msg = "Account has been temporarily locked due to 5 consecutive failed login attempts. Please try again in 15 minutes or contact your administrator."
+                else:
+                    err_msg = f"Invalid User ID or Password. {lock_res['remaining_attempts']} attempt(s) remaining before account lockout."
+            else:
+                err_msg = "Invalid User ID or Password. Please check your credentials."
+
+            AuditLogger.log_action(None, 'API_LOGIN_FAILED', 'User', 0, {'user_id': login_id, 'reason': err_msg}, request)
+            return JsonResponse({'error': err_msg}, status=401)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 

@@ -550,6 +550,83 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertFalse(Dataset.objects.filter(id=del_ds.id).exists())
 
+    def test_public_registration_disabled(self):
+        url = reverse('analytics:api_auth_register')
+        res = self.client.post(url, data=json.dumps({
+            'user_id': 'hacker.user',
+            'password': 'password123'
+        }), content_type='application/json')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Public registration is disabled', res.json()['error'])
+
+    def test_admin_registration_allowed(self):
+        admin_user = User.objects.create_superuser(username='secadmin', password='adminpassword')
+        self.client.force_login(admin_user)
+        url = reverse('analytics:api_auth_register')
+        res = self.client.post(url, data=json.dumps({
+            'user_id': 'EMP-2002',
+            'password': 'SecretPassword123',
+            'role': 'analyst'
+        }), content_type='application/json')
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(User.objects.filter(username='EMP-2002').exists())
+
+    def test_lockout_after_five_failed_attempts(self):
+        test_user = User.objects.create_user(username='lockuser', password='correct_pwd')
+        UserProfile.objects.get_or_create(user=test_user, defaults={'login_id': 'lockuser'})
+
+        login_url = reverse('analytics:login')
+        # 5 failed attempts
+        for _ in range(5):
+            res = self.client.post(login_url, {'user_id': 'lockuser', 'password': 'wrong_pwd'})
+            self.assertEqual(res.status_code, 200)
+
+        profile = UserProfile.objects.get(user=test_user)
+        self.assertTrue(profile.is_locked())
+
+        # Attempt with correct password should be blocked due to lock
+        res = self.client.post(login_url, {'user_id': 'lockuser', 'password': 'correct_pwd'})
+        self.assertIn('Account is temporarily locked', res.content.decode())
+
+    def test_password_with_spaces_preserved(self):
+        space_pwd = " leading and trailing "
+        space_user = User.objects.create_user(username='spaceuser', password=space_pwd)
+        UserProfile.objects.get_or_create(user=space_user, defaults={'login_id': 'spaceuser'})
+
+        login_url = reverse('analytics:login')
+        res = self.client.post(login_url, {'user_id': 'spaceuser', 'password': space_pwd})
+        self.assertEqual(res.status_code, 302)  # Redirects to index
+
+    def test_must_change_password_flow(self):
+        temp_user = User.objects.create_user(username='tempuser', password='temppassword')
+        profile, _ = UserProfile.objects.get_or_create(user=temp_user, defaults={'login_id': 'tempuser', 'must_change_password': True})
+        profile.must_change_password = True
+        profile.save()
+
+        # Login redirects to change-password
+        login_url = reverse('analytics:login')
+        res = self.client.post(login_url, {'user_id': 'tempuser', 'password': 'temppassword'})
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('change-password', res.url)
+
+        # Accessing index directly redirects to change-password
+        self.client.force_login(temp_user)
+        res_idx = self.client.get(reverse('analytics:index'))
+        self.assertEqual(res_idx.status_code, 302)
+        self.assertIn('change-password', res_idx.url)
+
+        # Change password
+        ch_url = reverse('analytics:change_password')
+        res_change = self.client.post(ch_url, {
+            'new_password': 'NewSecurePassword99!',
+            'confirm_password': 'NewSecurePassword99!'
+        })
+        self.assertEqual(res_change.status_code, 302)
+
+        profile.refresh_from_db()
+        self.assertFalse(profile.must_change_password)
+
+
 
 
 

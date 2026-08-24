@@ -9,12 +9,16 @@ from .models import Dashboard, Dataset, UserProfile
 
 logger = logging.getLogger(__name__)
 
+from .services import SecurityLockoutService, AuditLogger
+
 @login_required(login_url='/login/')
 def index_view(request):
     """
     Main Power BI Studio single page application shell (Requires Authentication).
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    if profile.must_change_password:
+        return redirect('analytics:change_password')
     role = profile.role if profile else 'admin'
     return render(request, 'analytics/index.html', {
         'user_role': role,
@@ -25,6 +29,7 @@ def login_view(request):
     """
     Handles user login using Admin-assigned User ID and Password.
     Authenticates by username, UserProfile login_id, or case-insensitive matches.
+    Enforces SecurityLockoutService, active status check, and must_change_password redirect.
     """
     if request.user.is_authenticated:
         return redirect('analytics:index')
@@ -35,53 +40,107 @@ def login_view(request):
         user_id = request.POST.get('user_id', '').strip()
         if not user_id:
             user_id = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '').strip()
+        password = request.POST.get('password', '')  # DO NOT strip passwords
 
         if not user_id or not password:
             error_msg = "Please enter both your User ID and Password."
         else:
-            # 1. Direct username authentication
-            user = authenticate(request, username=user_id, password=password)
+            # Find candidate user profile to check lockout before attempting auth
+            target_profile = UserProfile.objects.filter(login_id__iexact=user_id).select_related('user').first()
+            if not target_profile:
+                target_user = User.objects.filter(username__iexact=user_id).first()
+                if target_user:
+                    target_profile, _ = UserProfile.objects.get_or_create(user=target_user)
 
-            # 2. Look up by UserProfile.login_id
-            if user is None:
-                profile = UserProfile.objects.filter(login_id__iexact=user_id).select_related('user').first()
-                if profile:
-                    user = authenticate(request, username=profile.user.username, password=password)
-
-            # 3. Case-insensitive username fallback
-            if user is None:
-                db_user = User.objects.filter(username__iexact=user_id).first()
-                if db_user:
-                    user = authenticate(request, username=db_user.username, password=password)
-
-            if user is not None:
-                # Ensure UserProfile exists with login_id set
-                profile, _ = UserProfile.objects.get_or_create(user=user)
-                if not profile.login_id:
-                    profile.login_id = user.username
-                    profile.save(update_fields=['login_id'])
-
-                if profile.is_locked():
-                    error_msg = "Account is temporarily locked. Please contact your administrator."
-                elif not user.is_active:
-                    error_msg = "This account has been disabled. Please contact your administrator."
-                else:
-                    if profile.failed_login_attempts > 0:
-                        profile.failed_login_attempts = 0
-                        profile.save(update_fields=['failed_login_attempts'])
-
-                    login(request, user)
-                    logger.info(f"User '{user.username}' (User ID: '{user_id}') logged in successfully.")
-                    next_url = request.GET.get('next', '/')
-                    if not url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
-                        next_url = '/'
-                    return redirect(next_url)
+            if target_profile and target_profile.is_locked():
+                lock_info = SecurityLockoutService.get_lockout_info(target_profile)
+                error_msg = f"Account is temporarily locked due to multiple failed login attempts. Please try again in {lock_info['remaining_minutes']} minute(s) or contact your administrator."
             else:
-                logger.warning(f"Failed login attempt for User ID: '{user_id}'")
-                error_msg = "Invalid User ID or Password. Please check your credentials."
+                # 1. Direct username authentication
+                user = authenticate(request, username=user_id, password=password)
+
+                # 2. Look up by UserProfile.login_id
+                if user is None and target_profile:
+                    user = authenticate(request, username=target_profile.user.username, password=password)
+
+                # 3. Case-insensitive username fallback
+                if user is None:
+                    db_user = User.objects.filter(username__iexact=user_id).first()
+                    if db_user:
+                        user = authenticate(request, username=db_user.username, password=password)
+
+                if user is not None:
+                    profile, _ = UserProfile.objects.get_or_create(user=user)
+                    if not profile.login_id:
+                        profile.login_id = user.username
+                        profile.save(update_fields=['login_id'])
+
+                    if not user.is_active:
+                        error_msg = "This account has been disabled by an administrator. Please contact your administrator."
+                        logger.warning(f"Login attempted for disabled account: '{user.username}'")
+                    else:
+                        SecurityLockoutService.reset_attempts(profile)
+                        login(request, user)
+                        AuditLogger.log_action(user, 'LOGIN_SUCCESS', 'User', user.id, {'user_id': user_id}, request)
+                        logger.info(f"User '{user.username}' (User ID: '{user_id}') logged in successfully.")
+
+                        if profile.must_change_password:
+                            return redirect('analytics:change_password')
+
+                        next_url = request.GET.get('next', '/')
+                        if not url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
+                            next_url = '/'
+                        return redirect(next_url)
+                else:
+                    if target_profile:
+                        lockout_res = SecurityLockoutService.record_failed_attempt(target_profile)
+                        if lockout_res['is_locked']:
+                            error_msg = "Account has been temporarily locked due to 5 consecutive failed login attempts. Please try again in 15 minutes or contact your administrator."
+                        else:
+                            error_msg = f"Invalid User ID or Password. {lockout_res['remaining_attempts']} attempt(s) remaining before account lockout."
+                    else:
+                        error_msg = "Invalid User ID or Password. Please check your credentials."
+
+                    AuditLogger.log_action(None, 'LOGIN_FAILED', 'User', 0, {'user_id': user_id, 'reason': error_msg}, request)
+                    logger.warning(f"Failed login attempt for User ID: '{user_id}'")
 
     return render(request, 'analytics/login.html', {
+        'error_msg': error_msg,
+    })
+
+@login_required(login_url='/login/')
+def change_password_view(request):
+    """
+    Handles mandatory or self-service user password reset.
+    """
+    error_msg = None
+
+    if request.method == 'POST':
+        new_pwd = request.POST.get('new_password', '')
+        confirm_pwd = request.POST.get('confirm_password', '')
+
+        if not new_pwd or not confirm_pwd:
+            error_msg = "Please provide and confirm your new password."
+        elif new_pwd != confirm_pwd:
+            error_msg = "Passwords do not match. Please try again."
+        elif len(new_pwd) < 6:
+            error_msg = "Password must be at least 6 characters long."
+        else:
+            user = request.user
+            user.set_password(new_pwd)
+            user.save()
+            profile = getattr(user, 'profile', None)
+            if profile and profile.must_change_password:
+                profile.must_change_password = False
+                profile.save(update_fields=['must_change_password'])
+
+            from django.contrib.auth import update_session_auth_hash
+            update_session_auth_hash(request, user)
+            AuditLogger.log_action(user, 'PASSWORD_CHANGE', 'User', user.id, {}, request)
+            logger.info(f"Password changed successfully for user '{user.username}'")
+            return redirect('analytics:index')
+
+    return render(request, 'analytics/change_password.html', {
         'error_msg': error_msg,
     })
 
