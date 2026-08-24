@@ -35,6 +35,7 @@ def login_view(request):
     if request.method == 'POST':
         action = request.POST.get('action', 'login')
         username = request.POST.get('username', '').strip()
+        login_id = request.POST.get('user_id', username).strip()
         password = request.POST.get('password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
         email = request.POST.get('email', '').strip()
@@ -49,13 +50,19 @@ def login_view(request):
                 error_msg = f"Username '{username}' is already taken. Please choose another."
             else:
                 user = User.objects.create_user(username=username, password=password, email=email)
-                UserProfile.objects.create(user=user, role=role)
+                UserProfile.objects.create(user=user, login_id=username, role=role)
                 login(request, user)
                 logger.info(f"New user registered and logged in: {username}")
                 return redirect('analytics:index')
 
         elif action == 'login':
-            user = authenticate(request, username=username, password=password)
+            user = authenticate(request, username=login_id, password=password)
+            if user is None and login_id != username:
+                user = authenticate(request, username=username, password=password)
+            if user is None:
+                profile = UserProfile.objects.filter(login_id=login_id).select_related('user').first()
+                if profile:
+                    user = authenticate(request, username=profile.user.username, password=password)
             if user is not None:
                 login(request, user)
                 logger.info(f"User authenticated successfully: {username}")

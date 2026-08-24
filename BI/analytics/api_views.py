@@ -12,7 +12,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Dataset, Dashboard, Widget, CalculatedMeasure, DatasetColumn, DatasetTag, DatasetSharePermission, DashboardShare, ScheduledRefresh, ActivityLog
+from .models import Dataset, Dashboard, Widget, CalculatedMeasure, DatasetColumn, DatasetTag, DatasetSharePermission, DashboardShare, ScheduledRefresh, ActivityLog, UserProfile
 from .serializers import DatasetSerializer, DashboardSerializer, WidgetSerializer, UserSerializer, DatasetSharePermissionSerializer, DashboardShareSerializer, ScheduledRefreshSerializer, ActivityLogSerializer
 from .permissions import IsOwnerOrReadOnly, IsAdminOrReadOnly, IsOwnerOrShared, HasExportPermission, CanEditDashboard
 from .services import DatasetEngine
@@ -75,10 +75,11 @@ def auth_register_api(request):
             return JsonResponse({'error': 'Username already exists'}, status=400)
 
         user = User.objects.create_user(username=username, password=password, email=email)
+        UserProfile.objects.create(user=user, login_id=username)
         login(request, user)
         return JsonResponse({
             'message': 'Registration successful',
-            'user': {'id': user.id, 'username': user.username, 'email': user.email}
+            'user': {'id': user.id, 'username': user.username, 'user_id': username, 'email': user.email}
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -90,14 +91,19 @@ def auth_login_api(request):
     try:
         data = json.loads(request.body)
         username = data.get('username', '').strip()
+        login_id = data.get('user_id', username).strip()
         password = data.get('password', '').strip()
 
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=login_id, password=password)
+        if user is None:
+            profile = UserProfile.objects.filter(login_id=login_id).select_related('user').first()
+            if profile:
+                user = authenticate(request, username=profile.user.username, password=password)
         if user is not None:
             login(request, user)
             return JsonResponse({
                 'message': 'Login successful',
-                'user': {'id': user.id, 'username': user.username, 'email': user.email}
+                'user': {'id': user.id, 'username': user.username, 'user_id': login_id, 'email': user.email}
             })
         else:
             return JsonResponse({'error': 'Invalid username or password'}, status=401)
@@ -117,6 +123,7 @@ def auth_me_api(request):
             'user': {
                 'id': request.user.id,
                 'username': request.user.username,
+                'user_id': getattr(getattr(request.user, 'profile', None), 'login_id', None),
                 'email': request.user.email,
                 'is_staff': request.user.is_staff
             }

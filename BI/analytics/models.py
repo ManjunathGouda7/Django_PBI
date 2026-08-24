@@ -35,6 +35,7 @@ class UserProfile(models.Model):
         ('viewer', 'Report Viewer'),
     )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    login_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
     totp_secret = models.CharField(max_length=64, blank=True, null=True)
     is_totp_enabled = models.BooleanField(default=False)

@@ -60,6 +60,15 @@ class AnalyticsAuthViewTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
 
+    def test_login_with_admin_assigned_user_id(self):
+        profile = UserProfile.objects.create(user=self.user, login_id='secret-john', role='viewer')
+        response = self.client.post(reverse('analytics:login'), {
+            'action': 'login',
+            'user_id': profile.login_id,
+            'password': 'secretpassword'
+        })
+        self.assertEqual(response.status_code, 302)
+
     def test_registration_with_matching_passwords(self):
         response = self.client.post(reverse('analytics:login'), {
             'action': 'register',
