@@ -28,6 +28,14 @@ class Organization(models.Model):
     def __str__(self):
         return self.name
 
+from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
+
+user_id_validator = RegexValidator(
+    regex=r'^[a-zA-Z0-9._-]+$',
+    message='User ID may only contain letters, numbers, dots, hyphens, and underscores (no spaces or special characters).'
+)
+
 class UserProfile(models.Model):
     ROLE_CHOICES = (
         ('admin', 'Administrator'),
@@ -35,12 +43,36 @@ class UserProfile(models.Model):
         ('viewer', 'Report Viewer'),
     )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    login_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    login_id = models.CharField(
+        max_length=100, 
+        unique=True, 
+        null=True, 
+        blank=True,
+        validators=[user_id_validator],
+        help_text="Unique User ID (e.g. john.smith, EMP-1001). No spaces allowed."
+    )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
+    must_change_password = models.BooleanField(
+        default=False, 
+        help_text="Force user to reset password on next login."
+    )
     totp_secret = models.CharField(max_length=64, blank=True, null=True)
     is_totp_enabled = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        super().clean()
+        if self.login_id:
+            self.login_id = self.login_id.strip()
+            if ' ' in self.login_id:
+                raise ValidationError({'login_id': 'User ID cannot contain spaces.'})
+            # Case-insensitive uniqueness check
+            existing = UserProfile.objects.filter(login_id__iexact=self.login_id)
+            if self.pk:
+                existing = existing.exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError({'login_id': f"User ID '{self.login_id}' already exists (case-insensitive)."})
 
     def is_locked(self):
         if self.locked_until and self.locked_until > timezone.now():
