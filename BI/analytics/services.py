@@ -56,10 +56,56 @@ class DatasetEngine:
         return columns
 
     @staticmethod
+    def _store_in_cache(cache_key, df, filepath=None):
+        mtime = None
+        if filepath and os.path.exists(filepath):
+            try:
+                mtime = os.path.getmtime(filepath)
+            except Exception:
+                pass
+        _df_cache[cache_key] = {
+            'df': df,
+            'mtime': mtime,
+            'filepath': filepath
+        }
+
+    @staticmethod
+    def _get_from_cache(cache_key, current_filepath=None):
+        if cache_key not in _df_cache:
+            return None
+        cached = _df_cache[cache_key]
+        if isinstance(cached, pd.DataFrame):
+            return cached.copy()
+        if isinstance(cached, dict) and 'df' in cached:
+            cached_filepath = cached.get('filepath')
+            cached_mtime = cached.get('mtime')
+            if current_filepath and os.path.exists(current_filepath):
+                try:
+                    current_mtime = os.path.getmtime(current_filepath)
+                    if cached_mtime is not None and current_mtime != cached_mtime:
+                        _df_cache.pop(cache_key, None)
+                        return None
+                    if cached_filepath and cached_filepath != current_filepath:
+                        _df_cache.pop(cache_key, None)
+                        return None
+                except Exception:
+                    pass
+            return cached['df'].copy()
+        return None
+
+    @staticmethod
     def load_dataframe(dataset):
         cache_key = dataset.id
-        if cache_key in _df_cache:
-            return _df_cache[cache_key].copy()
+        filepath = None
+        if dataset.file and hasattr(dataset.file, 'path'):
+            try:
+                filepath = dataset.file.path
+            except Exception:
+                filepath = None
+
+        cached_df = DatasetEngine._get_from_cache(cache_key, current_filepath=filepath)
+        if cached_df is not None:
+            return cached_df
 
         possible_paths = [
             os.path.join(settings.BASE_DIR.parent, 'data', 'GRL.25MPLA.json'),
@@ -80,7 +126,7 @@ class DatasetEngine:
                 docs = list(coll.find({}, {'_id': False}).limit(10000))
                 if docs:
                     df = pd.json_normalize(docs)
-                    _df_cache[cache_key] = df
+                    DatasetEngine._store_in_cache(cache_key, df)
                     return df.copy()
             except Exception as e:
                 print(f"MongoDB server ({url}) not reachable. Using local fallback.")
@@ -90,7 +136,7 @@ class DatasetEngine:
                     df = pd.read_json(j_path)
                     if '_id' in df.columns:
                         df = df.drop(columns=['_id'])
-                    _df_cache[cache_key] = df
+                    DatasetEngine._store_in_cache(cache_key, df, filepath=j_path)
                     return df.copy()
 
         if not dataset.file:
@@ -99,7 +145,7 @@ class DatasetEngine:
                     df = pd.read_json(j_path)
                     if '_id' in df.columns:
                         df = df.drop(columns=['_id'])
-                    _df_cache[cache_key] = df
+                    DatasetEngine._store_in_cache(cache_key, df, filepath=j_path)
                     return df.copy()
 
             # Synthetic sample dataset fallback for CI/Test environments
@@ -111,11 +157,10 @@ class DatasetEngine:
                 'PowerMode': ['Normal', 'High', 'Normal', 'Low', 'Normal', 'High', 'Low', 'Normal'],
                 'Timestamp': ['2026-08-10 10:00:00', '2026-08-10 10:01:00', '2026-08-10 10:02:00', '2026-08-10 10:03:00', '2026-08-10 10:04:00', '2026-08-10 10:05:00', '2026-08-10 10:06:00', '2026-08-10 10:07:00']
             })
-            _df_cache[cache_key] = mock_df
+            DatasetEngine._store_in_cache(cache_key, mock_df)
             return mock_df.copy()
 
-        filepath = dataset.file.path
-        if not os.path.exists(filepath):
+        if not filepath or not os.path.exists(filepath):
             mock_df = pd.DataFrame({
                 'Board': ['GTPT106', 'GTPT118', 'TPR129_GTPT', 'TPR131_GTPT', 'GTPT142'],
                 'Power': [10.5, 12.0, 15.2, 14.8, 11.2],
@@ -124,7 +169,7 @@ class DatasetEngine:
                 'PowerMode': ['Normal', 'High', 'Normal', 'Low', 'Normal'],
                 'Timestamp': ['2026-08-10 10:00:00', '2026-08-10 10:01:00', '2026-08-10 10:02:00', '2026-08-10 10:03:00', '2026-08-10 10:04:00']
             })
-            _df_cache[cache_key] = mock_df
+            DatasetEngine._store_in_cache(cache_key, mock_df)
             return mock_df.copy()
 
         if dataset.file_type == 'json' or filepath.endswith('.json'):
@@ -138,7 +183,7 @@ class DatasetEngine:
         else:
             df = pd.read_csv(filepath)
 
-        _df_cache[cache_key] = df
+        DatasetEngine._store_in_cache(cache_key, df, filepath=filepath)
         return df.copy()
 
     @staticmethod
@@ -157,8 +202,6 @@ class DatasetEngine:
             else:
                 for i in range(0, len(df), chunksize):
                     yield df.iloc[i:i + chunksize]
-
-
 
     @staticmethod
     def clear_cache(dataset_id=None):
@@ -293,11 +336,6 @@ class DatasetEngine:
                 try:
 
                     group_col = widget.group_by if (widget.group_by and widget.group_by in df.columns) else None
-                    if not group_col:
-                        for candidate in ['Board', 'PowerMode', 'Power', 'DUT', 'CRX', 'RUN']:
-                            if candidate in df.columns:
-                                group_col = candidate
-                                break
 
                     colors = ['#00A4EF', '#002060', '#F25022', '#7FBA00', '#FFB900', '#6B69D6', '#E3008C', '#10b981', '#a855f7', '#ec4899']
                     datasets = []
@@ -306,14 +344,18 @@ class DatasetEngine:
                         groups = df[group_col].dropna().unique()[:15]
                         for i, g_val in enumerate(groups):
                             sub_df = df[df[group_col] == g_val][[x_col, y_col]].dropna()
-                            x_nums = pd.to_numeric(sub_df[x_col], errors='coerce')
-                            y_nums = pd.to_numeric(sub_df[y_col], errors='coerce')
-                            valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums >= -1000) & (y_nums <= 1000)
+                            if sub_df.empty:
+                                continue
+                            x_vals = sub_df[x_col].to_numpy().ravel()
+                            y_vals = sub_df[y_col].to_numpy().ravel()
+                            x_nums = pd.to_numeric(x_vals, errors='coerce')
+                            y_nums = pd.to_numeric(y_vals, errors='coerce')
+                            valid_mask = ~np.isnan(x_nums) & ~np.isnan(y_nums)
 
-                            x_arr = np.round(x_nums[valid_mask].head(2500).to_numpy(), 2).tolist()
-                            y_arr = np.round(y_nums[valid_mask].head(2500).to_numpy(), 2).tolist()
+                            x_arr = np.round(x_nums[valid_mask][:2500], 2).tolist()
+                            y_arr = np.round(y_nums[valid_mask][:2500], 2).tolist()
 
-                            points = [{'x': x, 'y': y} for x, y in zip(x_arr, y_arr)]
+                            points = [{'x': float(x), 'y': float(y)} for x, y in zip(x_arr, y_arr)]
                             if points:
                                 datasets.append({
                                     'label': str(g_val),
@@ -322,19 +364,22 @@ class DatasetEngine:
                                 })
                     else:
                         sub_df = df[[x_col, y_col]].dropna()
-                        x_nums = pd.to_numeric(sub_df[x_col], errors='coerce')
-                        y_nums = pd.to_numeric(sub_df[y_col], errors='coerce')
-                        valid_mask = x_nums.notnull() & y_nums.notnull() & (x_nums >= -5) & (y_nums >= -1000) & (y_nums <= 1000)
+                        if not sub_df.empty:
+                            x_vals = sub_df[x_col].to_numpy().ravel()
+                            y_vals = sub_df[y_col].to_numpy().ravel()
+                            x_nums = pd.to_numeric(x_vals, errors='coerce')
+                            y_nums = pd.to_numeric(y_vals, errors='coerce')
+                            valid_mask = ~np.isnan(x_nums) & ~np.isnan(y_nums)
 
-                        x_arr = np.round(x_nums[valid_mask].head(4000).to_numpy(), 2).tolist()
-                        y_arr = np.round(y_nums[valid_mask].head(4000).to_numpy(), 2).tolist()
+                            x_arr = np.round(x_nums[valid_mask][:4000], 2).tolist()
+                            y_arr = np.round(y_nums[valid_mask][:4000], 2).tolist()
 
-                        points = [{'x': x, 'y': y} for x, y in zip(x_arr, y_arr)]
-                        datasets.append({
-                            'label': f"{y_col} vs {x_col}",
-                            'data': points,
-                            'color': '#00A4EF'
-                        })
+                            points = [{'x': float(x), 'y': float(y)} for x, y in zip(x_arr, y_arr)]
+                            datasets.append({
+                                'label': f"{y_col} vs {x_col}",
+                                'data': points,
+                                'color': '#00A4EF'
+                            })
 
                     # Calculate Target Specification Limits (Upper & Lower Bounds)
                     target_upper = None

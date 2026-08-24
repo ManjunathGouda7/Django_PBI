@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Dataset, Dashboard, Widget, CalculatedMeasure, Organization, ActivityLog
+from .models import Dataset, Dashboard, Widget, CalculatedMeasure, Organization, ActivityLog, UserProfile
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ('login_id', 'user', 'role', 'is_totp_enabled')
+    list_filter = ('role', 'is_totp_enabled')
+    search_fields = ('login_id', 'user__username', 'user__email')
+    autocomplete_fields = ('user',)
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):

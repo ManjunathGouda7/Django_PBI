@@ -29,17 +29,26 @@
                 </button>
             </div>
 
-            <div class="select-group">
+            <div class="select-group" style="display:flex; align-items:center; gap:0.4rem;">
                 <label><i class="fa-solid fa-database"></i> Dataset:</label>
                 <select id="dataset-select" class="pbi-select">
                     <option value="">Loading Datasets...</option>
                 </select>
+                <button class="btn btn-xs btn-outline-warning" id="btn-update-dataset" title="Update / Replace File on Active Dataset" style="padding: 4px 8px; font-size:0.75rem;">
+                    <i class="fa-solid fa-file-pen"></i> Replace File
+                </button>
+                <button class="btn btn-xs btn-outline-danger" id="btn-delete-dataset" title="Delete Active Dataset & File" style="padding: 4px 8px; font-size:0.75rem; color:#ef4444; border-color:rgba(239,68,68,0.4);">
+                    <i class="fa-solid fa-trash-can"></i> Delete
+                </button>
             </div>
         </div>
 
         <div class="navbar-actions">
             <button class="btn btn-warning" id="btn-get-data">
                 <i class="fa-solid fa-file-import"></i> Get Data
+            </button>
+            <button class="btn btn-secondary" id="btn-refresh-data" title="Refresh CSV and Dataset Caches">
+                <i class="fa-solid fa-arrows-rotate"></i> Refresh Data
             </button>
             <div class="theme-picker">
                 <label><i class="fa-solid fa-palette"></i></label>
@@ -394,6 +403,10 @@
                     <input type="file" id="upload-file-input" class="pbi-input-file" accept=".csv, .json, .xlsx, .xls"
                         required>
                 </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top: -0.25rem; margin-bottom: 1rem;">
+                    <input type="checkbox" id="upload-replace-checkbox" style="accent-color: var(--pbi-yellow);">
+                    <label for="upload-replace-checkbox" style="font-size:0.85rem; cursor:pointer; color:#94a3b8; margin-bottom:0;">Replace dataset if name already exists</label>
+                </div>
                 <button type="submit" class="btn btn-primary btn-block">
                     <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Import Dataset
                 </button>
@@ -450,13 +463,36 @@
                 </div>
             </form>
 
-            <div class="divider">OR</div>
-
-            <div class="sample-data-section">
-                <h4>Choose Built-in Sample Datasets</h4>
-                <div class="sample-cards" id="sample-datasets-container">
-                    <!-- Sample items injected dynamically -->
+            <!-- Built-in Sample Datasets -->
+            <div class="sample-datasets-section">
+                <h4><i class="fa-solid fa-flask text-warning"></i> Built-in Telemetry Samples</h4>
+                <div class="sample-grid" id="sample-datasets-container">
+                    <!-- Dynamic sample cards -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Update / Replace Dataset File -->
+    <div class="modal-backdrop" id="modal-update-dataset" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-pen text-warning"></i> Replace Dataset File</h3>
+                <button class="btn-close-modal" id="close-modal-update-data">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                    Select a new file (CSV / JSON / XLSX) to update dataset <strong id="update-target-dataset-name" style="color: var(--pbi-yellow);">Active Dataset</strong>. This will replace the physical file, refresh column schema, and clear cache.
+                </p>
+                <form id="update-dataset-form" class="upload-form">
+                    <div class="form-group">
+                        <label>Select Replacement File (CSV / JSON / XLSX)</label>
+                        <input type="file" id="update-file-input" class="pbi-input-file" accept=".csv, .json, .xlsx, .xls" required>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-block">
+                        <i class="fa-solid fa-arrows-rotate"></i> Update & Re-Index Dataset
+                    </button>
+                </form>
             </div>
         </div>
     </div>

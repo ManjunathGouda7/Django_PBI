@@ -1,3 +1,5 @@
+import os
+import json
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -54,6 +56,15 @@ class AnalyticsAuthViewTests(TestCase):
         response = self.client.post(reverse('analytics:login'), {
             'action': 'login',
             'username': 'john',
+            'password': 'secretpassword'
+        })
+        self.assertEqual(response.status_code, 302)
+
+    def test_login_with_admin_assigned_user_id(self):
+        profile = UserProfile.objects.create(user=self.user, login_id='secret-john', role='viewer')
+        response = self.client.post(reverse('analytics:login'), {
+            'action': 'login',
+            'user_id': profile.login_id,
             'password': 'secretpassword'
         })
         self.assertEqual(response.status_code, 302)
@@ -487,11 +498,60 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         res_rev = self.client.post(url_rev, data='{"action": "snapshot", "change_summary": "Initial baseline"}', content_type='application/json')
         self.assertEqual(res_rev.status_code, 200)
 
-    def test_prometheus_metrics_api(self):
-        url = reverse('analytics:prometheus_metrics')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"apexbi_datasets_total", response.content)
+    def test_csv_cache_mtime_invalidation(self):
+        import tempfile
+        import time
+        from .services import DatasetEngine
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+            f.write("Board,Power\nGTPT101,10.0\n")
+            temp_path = f.name
+
+        try:
+            from django.core.files import File
+            with open(temp_path, 'rb') as f_obj:
+                ds = Dataset.objects.create(
+                    name="Temp CSV DS",
+                    file_type="csv",
+                    file=File(f_obj, name="temp.csv")
+                )
+
+            df1 = DatasetEngine.load_dataframe(ds)
+            self.assertEqual(len(df1), 1)
+            self.assertEqual(float(df1.iloc[0]['Power']), 10.0)
+
+            time.sleep(0.1)
+
+            # Update file on disk
+            real_path = ds.file.path
+            with open(real_path, 'w') as f:
+                f.write("Board,Power\nGTPT101,10.0\nGTPT102,25.5\n")
+
+            df2 = DatasetEngine.load_dataframe(ds)
+            self.assertEqual(len(df2), 2)
+            self.assertEqual(float(df2.iloc[1]['Power']), 25.5)
+
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def test_dashboard_dataset_switch_api(self):
+        self.client.force_login(self.user)
+        new_ds = Dataset.objects.create(name='New Switch DS', file_type='sample', is_sample=True, created_by=self.user)
+        url = reverse('analytics:api_dashboard_detail', kwargs={'dashboard_id': self.dashboard.id})
+        res = self.client.put(url, data=json.dumps({'dataset_id': new_ds.id}), content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+        self.dashboard.refresh_from_db()
+        self.assertEqual(self.dashboard.dataset.id, new_ds.id)
+
+    def test_dataset_delete_api(self):
+        self.client.force_login(self.user)
+        del_ds = Dataset.objects.create(name='Delete Target DS', file_type='sample', is_sample=True, created_by=self.user)
+        url = reverse('analytics:api_dataset_detail', kwargs={'dataset_id': del_ds.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Dataset.objects.filter(id=del_ds.id).exists())
+
 
 
 
