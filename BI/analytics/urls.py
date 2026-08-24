@@ -11,6 +11,7 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('change-password/', views.change_password_view, name='change_password'),
+    path('security-dashboard/', views.security_dashboard_view, name='security_dashboard'),
     path('favicon.ico', views.favicon_view, name='favicon'),
     path('export/<int:dashboard_id>/', views.export_dashboard_view, name='export_dashboard'),
     path('export-csv/<int:dataset_id>/', views.export_csv_view, name='export_csv'),

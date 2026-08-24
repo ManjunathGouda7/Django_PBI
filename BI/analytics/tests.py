@@ -559,17 +559,18 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(res.status_code, 403)
         self.assertIn('Public registration is disabled', res.json()['error'])
 
-    def test_admin_registration_allowed(self):
-        admin_user = User.objects.create_superuser(username='secadmin', password='adminpassword')
-        self.client.force_login(admin_user)
-        url = reverse('analytics:api_auth_register')
-        res = self.client.post(url, data=json.dumps({
-            'user_id': 'EMP-2002',
-            'password': 'SecretPassword123',
-            'role': 'analyst'
-        }), content_type='application/json')
-        self.assertEqual(res.status_code, 201)
-        self.assertTrue(User.objects.filter(username='EMP-2002').exists())
+    def test_manjunath_sole_admin_rights(self):
+        # Manjunath user
+        manju_user = User.objects.create_user(username='Manjunath', password='password123')
+        manju_profile = UserProfile.objects.get(user=manju_user)
+        self.assertTrue(manju_profile.is_admin)
+        self.assertEqual(manju_profile.get_role_display(), 'Administrator')
+
+        # Other standard user
+        regular_user = User.objects.create_user(username='john.doe', password='password123')
+        regular_profile = UserProfile.objects.get(user=regular_user)
+        self.assertFalse(regular_profile.is_admin)
+        self.assertEqual(regular_profile.get_role_display(), 'User')
 
     def test_lockout_after_five_failed_attempts(self):
         test_user = User.objects.create_user(username='lockuser', password='correct_pwd')
@@ -625,6 +626,42 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
 
         profile.refresh_from_db()
         self.assertFalse(profile.must_change_password)
+
+    def test_auto_employee_user_id_generation(self):
+        from .services import EmployeeIdGeneratorService
+        gen_id1 = EmployeeIdGeneratorService.generate_next_id()
+        self.assertTrue(gen_id1.startswith('EMP-'))
+
+    def test_password_complexity_rules(self):
+        from .services import PasswordPolicyService
+        # Simple password fails
+        errs = PasswordPolicyService.validate_complexity('simple')
+        self.assertTrue(len(errs) > 0)
+
+        # Complex password passes
+        errs2 = PasswordPolicyService.validate_complexity('ComplexPass99!')
+        self.assertEqual(len(errs2), 0)
+
+    def test_security_dashboard_access_and_unlock(self):
+        admin_user = User.objects.create_user(username='Manjunath', password='ComplexPass99!')
+        self.client.force_login(admin_user)
+
+        target_user = User.objects.create_user(username='targetlock', password='ComplexPass99!')
+        target_profile = UserProfile.objects.get(user=target_user)
+        target_profile.status = 'locked'
+        target_profile.failed_login_attempts = 5
+        target_profile.save()
+
+        sec_url = reverse('analytics:security_dashboard')
+        res = self.client.get(sec_url)
+        self.assertEqual(res.status_code, 200)
+
+        # Admin unlocks target
+        res_post = self.client.post(sec_url, {'action': 'unlock', 'user_id': target_profile.id})
+        self.assertEqual(res_post.status_code, 200)
+        target_profile.refresh_from_db()
+        self.assertEqual(target_profile.status, 'active')
+        self.assertEqual(target_profile.failed_login_attempts, 0)
 
 
 

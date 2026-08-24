@@ -69,7 +69,7 @@ def auth_register_api(request):
         return JsonResponse({'error': 'POST method required'}, status=405)
 
     profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
-    is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+    is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
     if not is_admin:
         return JsonResponse({
             'error': 'Public registration is disabled. Please contact your system administrator to obtain access credentials.'
@@ -81,36 +81,57 @@ def auth_register_api(request):
         login_id = data.get('user_id', username).strip()
         password = data.get('password', '')  # DO NOT strip passwords
         email = data.get('email', '').strip()
-        role = data.get('role', 'analyst')
-        must_change = bool(data.get('must_change_password', False))
+        emp_name = data.get('employee_name', '').strip()
+        department = data.get('department', '').strip()
+        phone = data.get('phone_number', '').strip()
+        must_change = bool(data.get('must_change_password', True))
 
-        if not login_id or not password:
-            return JsonResponse({'error': 'User ID and password are required.'}, status=400)
-        
+        from .services import EmployeeIdGeneratorService, PasswordPolicyService, AuditLogger
+        if not login_id:
+            login_id = EmployeeIdGeneratorService.generate_next_id()
+
+        if not password:
+            return JsonResponse({'error': 'Password is required.'}, status=400)
+
+        # Validate password complexity
+        comp_errs = PasswordPolicyService.validate_complexity(password)
+        if comp_errs:
+            return JsonResponse({'error': " ".join(comp_errs)}, status=400)
+
         # User ID validation
         if ' ' in login_id:
             return JsonResponse({'error': 'User ID cannot contain spaces.'}, status=400)
-        
+
         import re
         if not re.match(r'^[a-zA-Z0-9._-]+$', login_id):
             return JsonResponse({'error': 'User ID may only contain letters, numbers, dots, hyphens, and underscores.'}, status=400)
 
-        if User.objects.filter(username__iexact=login_id).exists() or UserProfile.objects.filter(login_id__iexact=login_id).exists():
+        if User.objects.filter(username__iexact=login_id).exists() or UserProfile.objects.filter(login_id_lower=login_id.lower()).exists():
             return JsonResponse({'error': f"User ID '{login_id}' already exists."}, status=400)
 
         user = User.objects.create_user(username=login_id, password=password, email=email)
         user_prof, _ = UserProfile.objects.get_or_create(user=user)
         user_prof.login_id = login_id
-        user_prof.role = role
+        user_prof.employee_number = login_id
+        user_prof.employee_name = emp_name
+        user_prof.department = department
+        user_prof.phone_number = phone
         user_prof.must_change_password = must_change
         user_prof.save()
 
-        from .services import AuditLogger
-        AuditLogger.log_action(request.user, 'USER_CREATE', 'User', user.id, {'user_id': login_id, 'role': role}, request)
+        PasswordPolicyService.record_password_change(user, password)
+        AuditLogger.log_action(request.user, 'USER_CREATE', 'User', user.id, {'user_id': login_id}, request)
 
         return JsonResponse({
-            'message': f"User '{login_id}' created successfully.",
-            'user': {'id': user.id, 'username': user.username, 'user_id': login_id, 'email': user.email, 'role': role}
+            'message': f"Account for User ID '{login_id}' created successfully.",
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'user_id': login_id,
+                'employee_name': emp_name,
+                'department': department,
+                'email': user.email
+            }
         }, status=201)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -292,8 +313,8 @@ def dataset_append_data_api(request, dataset_id=None):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication required. Please sign in.'}, status=401)
 
-    profile = getattr(request.user, 'profile', None)
-    is_admin = request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin')
+    profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
+    is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
     if not is_admin:
         return JsonResponse({
             'error': 'Permission Denied: Only Administrators are authorized to convert and append data to the main dataset.'
@@ -398,7 +419,7 @@ def datasets_list_api(request):
         # Handle Admin Append to data/GRL.25MPLA.json
         if append_to_main:
             profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
-            is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+            is_admin = request.user.is_authenticated and ((profile and profile.is_admin) or request.user.is_superuser or request.user.username.lower() == 'manjunath')
             if not is_admin:
                 return JsonResponse({'error': 'Permission Denied: Only Administrators can append data to the main dataset.'}, status=403)
 
