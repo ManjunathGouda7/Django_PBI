@@ -75,7 +75,7 @@ def auth_register_api(request):
             return JsonResponse({'error': 'Username already exists'}, status=400)
 
         user = User.objects.create_user(username=username, password=password, email=email)
-        UserProfile.objects.create(user=user, login_id=username)
+        UserProfile.objects.get_or_create(user=user, defaults={'login_id': username})
         login(request, user)
         return JsonResponse({
             'message': 'Registration successful',

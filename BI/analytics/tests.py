@@ -10,7 +10,9 @@ import pandas as pd
 class AnalyticsModelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='testuser', password='password123')
-        self.profile = UserProfile.objects.create(user=self.user, role='admin')
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user, defaults={'role': 'admin'})
+        self.profile.role = 'admin'
+        self.profile.save()
         self.dataset = Dataset.objects.create(
             name='Test Telemetry Dataset',
             file_type='sample',
