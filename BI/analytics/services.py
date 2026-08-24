@@ -70,6 +70,18 @@ class DatasetEngine:
         }
 
     @staticmethod
+    def clear_cache(cache_key=None):
+        global _df_cache
+        if cache_key is not None:
+            _df_cache.pop(cache_key, None)
+        else:
+            _df_cache.clear()
+
+    @staticmethod
+    def invalidate_cache(cache_key=None):
+        DatasetEngine.clear_cache(cache_key)
+
+    @staticmethod
     def _get_from_cache(cache_key, current_filepath=None):
         if cache_key not in _df_cache:
             return None
@@ -256,6 +268,129 @@ class DatasetEngine:
                 inserted_count += len(res.inserted_ids)
             return inserted_count
         return 0
+
+    @staticmethod
+    def append_data_to_main_json(input_file, dataset_id=None):
+        """
+        Converts any uploaded CSV, Excel, or JSON file to JSON records,
+        appends them to data/GRL.25MPLA.json, updates the dataset row count
+        and schema, and pushes to MongoDB if available.
+        """
+        import json
+        from .models import Dataset
+
+        # 1. Parse input file to DataFrame
+        if hasattr(input_file, 'name'):
+            fname = input_file.name.lower()
+            if fname.endswith('.csv'):
+                new_df = pd.read_csv(input_file)
+            elif fname.endswith(('.xlsx', '.xls')):
+                new_df = pd.read_excel(input_file)
+            elif fname.endswith('.json'):
+                new_df = pd.read_json(input_file)
+            else:
+                new_df = pd.read_csv(input_file)
+        elif isinstance(input_file, pd.DataFrame):
+            new_df = input_file.copy()
+        else:
+            new_df = pd.read_csv(input_file)
+
+        if new_df.empty:
+            return {'status': 'error', 'message': 'The uploaded file contains no data rows.'}
+
+        added_count = len(new_df)
+
+        # 2. Convert DataFrame to list of JSON dicts (handling NaN)
+        new_records = new_df.where(pd.notnull(new_df), None).to_dict(orient='records')
+        new_json_str = json.dumps(new_records, indent=2).strip()
+        # Strip outer [ and ]
+        if new_json_str.startswith('[') and new_json_str.endswith(']'):
+            inner_json = new_json_str[1:-1].strip()
+        else:
+            inner_json = new_json_str
+
+        # 3. Locate data/GRL.25MPLA.json
+        possible_paths = [
+            os.path.join(settings.BASE_DIR.parent, 'data', 'GRL.25MPLA.json'),
+            os.path.join(settings.BASE_DIR, 'data', 'GRL.25MPLA.json'),
+            os.path.join(settings.BASE_DIR, 'GRL.25MPLA.json')
+        ]
+        target_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                target_path = p
+                break
+        if not target_path:
+            target_path = possible_paths[0]
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            with open(target_path, 'w', encoding='utf-8') as f:
+                f.write('[]')
+
+        # 4. Append into target_path safely and quickly
+        try:
+            with open(target_path, 'rb+') as f:
+                f.seek(0, os.SEEK_END)
+                pos = f.tell()
+                while pos > 0:
+                    pos -= 1
+                    f.seek(pos, os.SEEK_SET)
+                    if f.read(1) == b']':
+                        f.seek(0, os.SEEK_SET)
+                        content = f.read().strip()
+                        is_empty_array = (content == b'[]' or content == b'[\n]' or content == b'[ ]')
+                        f.seek(pos, os.SEEK_SET)
+                        if not is_empty_array:
+                            f.write(b',\n')
+                        f.write(inner_json.encode('utf-8'))
+                        f.write(b'\n]')
+                        f.truncate()
+                        break
+        except Exception as e:
+            existing_df = pd.read_json(target_path)
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+            combined_df.to_json(target_path, orient='records', indent=2)
+
+        # 5. Push to MongoDB if reachable
+        try:
+            import pymongo
+            client = pymongo.MongoClient("mongodb://192.168.100.123:27017", serverSelectionTimeoutMS=500)
+            db = client['GRL']
+            coll = db['25MPLA']
+            clean_records = []
+            for r in new_records:
+                doc = dict(r)
+                if '_id' in doc and not isinstance(doc['_id'], dict):
+                    del doc['_id']
+                clean_records.append(doc)
+            coll.insert_many(clean_records)
+        except Exception:
+            pass
+
+        # 6. Update Dataset record & invalidate cache
+        total_rows = added_count
+        dataset = None
+        if dataset_id:
+            dataset = Dataset.objects.filter(id=dataset_id).first()
+        if not dataset:
+            dataset = Dataset.objects.filter(file_type='mongodb').first()
+        if not dataset:
+            dataset = Dataset.objects.first()
+
+        if dataset:
+            DatasetEngine.invalidate_cache(dataset.id)
+            total_df = DatasetEngine.load_dataframe(dataset)
+            total_rows = len(total_df)
+            dataset.row_count = total_rows
+            dataset.column_schema = DatasetEngine.infer_column_schema(total_df)
+            dataset.save(update_fields=['row_count', 'column_schema', 'updated_at'])
+
+        return {
+            'status': 'success',
+            'message': f'Successfully converted input data and appended {added_count:,} records into GRL.25MPLA.json!',
+            'added_rows': added_count,
+            'total_rows': total_rows,
+            'dataset_id': dataset.id if dataset else None
+        }
 
     @staticmethod
     def query_widget_data(dataset, widget, filters=None):

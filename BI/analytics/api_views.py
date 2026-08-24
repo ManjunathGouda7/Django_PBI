@@ -198,6 +198,48 @@ def mongodb_push_json_api(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 @csrf_exempt
+def dataset_append_data_api(request, dataset_id=None):
+    """
+    ADMIN ONLY: Converts an uploaded CSV/Excel/JSON file into JSON format
+    and appends all records directly into data/GRL.25MPLA.json and the active dataset.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required. Please sign in.'}, status=401)
+
+    profile = getattr(request.user, 'profile', None)
+    is_admin = request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin')
+    if not is_admin:
+        return JsonResponse({
+            'error': 'Permission Denied: Only Administrators are authorized to convert and append data to the main dataset.'
+        }, status=403)
+
+    if 'file' not in request.FILES:
+        return JsonResponse({'error': 'No file uploaded. Please select a CSV, Excel, or JSON file.'}, status=400)
+
+    uploaded_file = request.FILES['file']
+    try:
+        res = DatasetEngine.append_data_to_main_json(uploaded_file, dataset_id=dataset_id)
+        if res.get('status') == 'error':
+            return JsonResponse({'error': res.get('message', 'Failed to append data')}, status=400)
+
+        from .services import AuditLogger
+        AuditLogger.log_action(
+            request.user,
+            'DATASET_APPEND',
+            'Dataset',
+            res.get('dataset_id', 0),
+            {'added_rows': res.get('added_rows', 0), 'total_rows': res.get('total_rows', 0), 'filename': uploaded_file.name},
+            request
+        )
+
+        return JsonResponse(res)
+    except Exception as e:
+        return JsonResponse({'error': f'Failed to process file: {str(e)}'}, status=500)
+
+@csrf_exempt
 def mongodb_dataset_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
@@ -265,9 +307,51 @@ def datasets_list_api(request):
         name = request.POST.get('name')
         file_obj = request.FILES.get('file')
         replace_existing = request.POST.get('replace_existing', 'false').lower() == 'true'
+        append_to_main = request.POST.get('append_to_main', 'false').lower() == 'true'
 
-        if not name or not file_obj:
-            return JsonResponse({'error': 'Name and file are required.'}, status=400)
+        if not file_obj:
+            return JsonResponse({'error': 'A file is required for upload.'}, status=400)
+
+        # Handle Admin Append to data/GRL.25MPLA.json
+        if append_to_main:
+            profile = getattr(request.user, 'profile', None) if request.user.is_authenticated else None
+            is_admin = request.user.is_authenticated and (request.user.is_superuser or request.user.is_staff or (profile and profile.role == 'admin'))
+            if not is_admin:
+                return JsonResponse({'error': 'Permission Denied: Only Administrators can append data to the main dataset.'}, status=403)
+
+            res = DatasetEngine.append_data_to_main_json(file_obj)
+            if res.get('status') == 'error':
+                return JsonResponse({'error': res.get('message', 'Failed to append data.')}, status=400)
+
+            target_ds = Dataset.objects.filter(file_type='mongodb').first() or Dataset.objects.first()
+            if target_ds:
+                target_ds.row_count = res.get('total_rows', target_ds.row_count)
+                target_ds.save(update_fields=['row_count', 'updated_at'])
+
+            from .services import AuditLogger
+            AuditLogger.log_action(
+                request.user,
+                'DATASET_APPEND',
+                'Dataset',
+                res.get('dataset_id', target_ds.id if target_ds else 0),
+                {'added_rows': res.get('added_rows', 0), 'total_rows': res.get('total_rows', 0), 'filename': file_obj.name},
+                request
+            )
+
+            return JsonResponse({
+                'message': res.get('message'),
+                'added_rows': res.get('added_rows', 0),
+                'total_rows': res.get('total_rows', 0),
+                'dataset': {
+                    'id': target_ds.id if target_ds else None,
+                    'name': target_ds.name if target_ds else 'GRL - 25MPLA (192.168.100.123)',
+                    'row_count': res.get('total_rows', 0),
+                    'column_schema': target_ds.column_schema if target_ds else []
+                }
+            })
+
+        if not name:
+            name = os.path.splitext(file_obj.name)[0] if hasattr(file_obj, 'name') else 'New Dataset'
 
         fname = file_obj.name.lower()
         if fname.endswith('.json'):

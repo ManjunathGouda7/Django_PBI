@@ -24,6 +24,8 @@ urlpatterns = [
 
     # REST APIs
     path('api/datasets/', api_views.datasets_list_api, name='api_datasets_list'),
+    path('api/datasets/append-main/', api_views.dataset_append_data_api, name='api_dataset_append_main'),
+    path('api/datasets/<int:dataset_id>/append-data/', api_views.dataset_append_data_api, name='api_dataset_append_data'),
     path('api/datasets/mongodb/', api_views.mongodb_dataset_api, name='api_mongodb_dataset'),
     path('api/mongodb/collections/', api_views.mongodb_collections_api, name='api_mongodb_collections'),
     path('api/mongodb/push_json/', api_views.mongodb_push_json_api, name='api_mongodb_push_json'),
