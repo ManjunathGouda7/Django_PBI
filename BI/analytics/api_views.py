@@ -20,12 +20,12 @@ from .chat_engine import DataChatEngine
 
 # DRF ViewSets
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all().order_by('-date_joined')
+    queryset = User.objects.all().select_related('profile').order_by('-date_joined')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
 class DatasetViewSet(viewsets.ModelViewSet):
-    queryset = Dataset.objects.all().order_by('-created_at')
+    queryset = Dataset.objects.all().select_related('created_by', 'organization').order_by('-created_at')
     serializer_class = DatasetSerializer
     permission_classes = [IsOwnerOrShared]
 
@@ -49,12 +49,12 @@ class DatasetViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class DashboardViewSet(viewsets.ModelViewSet):
-    queryset = Dashboard.objects.all().order_by('-created_at')
+    queryset = Dashboard.objects.all().select_related('created_by', 'dataset', 'organization').prefetch_related('widgets').order_by('-created_at')
     serializer_class = DashboardSerializer
     permission_classes = [IsOwnerOrShared]
 
 class WidgetViewSet(viewsets.ModelViewSet):
-    queryset = Widget.objects.all().order_by('-created_at')
+    queryset = Widget.objects.all().select_related('dashboard', 'created_by').order_by('-created_at')
     serializer_class = WidgetSerializer
     permission_classes = [IsOwnerOrShared]
 

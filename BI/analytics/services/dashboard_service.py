@@ -62,30 +62,30 @@ class DashboardService:
         if group_col and group_col in df.columns:
             groups = df.groupby(group_col)
             for idx, (name, group_data) in enumerate(groups):
-                pts = []
-                for _, row in group_data.iterrows():
-                    b_val = str(row[board_col]) if board_col and board_col in row else 'N/A'
-                    pts.append({
-                        'x': float(row[x_col]) if pd.notnull(row[x_col]) else 0,
-                        'y': float(row[y_col]) if pd.notnull(row[y_col]) else 0,
-                        'board': b_val,
-                        'is_outlier': bool(row.get('_is_outlier', False))
-                    })
+                x_vals = pd.to_numeric(group_data[x_col], errors='coerce').fillna(0).tolist()
+                y_vals = pd.to_numeric(group_data[y_col], errors='coerce').fillna(0).tolist()
+                b_vals = group_data[board_col].astype(str).tolist() if board_col and board_col in group_data.columns else ['N/A'] * len(x_vals)
+                outlier_vals = group_data['_is_outlier'].tolist() if '_is_outlier' in group_data.columns else [False] * len(x_vals)
+
+                pts = [
+                    {'x': x, 'y': y, 'board': b, 'is_outlier': out}
+                    for x, y, b, out in zip(x_vals, y_vals, b_vals, outlier_vals)
+                ]
                 datasets.append({
                     'label': str(name),
                     'data': pts,
                     'color': palette[idx % len(palette)]
                 })
         else:
-            pts = []
-            for _, row in df.iterrows():
-                b_val = str(row[board_col]) if board_col and board_col in row else 'N/A'
-                pts.append({
-                    'x': float(row[x_col]) if pd.notnull(row[x_col]) else 0,
-                    'y': float(row[y_col]) if pd.notnull(row[y_col]) else 0,
-                    'board': b_val,
-                    'is_outlier': bool(row.get('_is_outlier', False))
-                })
+            x_vals = pd.to_numeric(df[x_col], errors='coerce').fillna(0).tolist()
+            y_vals = pd.to_numeric(df[y_col], errors='coerce').fillna(0).tolist()
+            b_vals = df[board_col].astype(str).tolist() if board_col and board_col in df.columns else ['N/A'] * len(x_vals)
+            outlier_vals = df['_is_outlier'].tolist() if '_is_outlier' in df.columns else [False] * len(x_vals)
+
+            pts = [
+                {'x': x, 'y': y, 'board': b, 'is_outlier': out}
+                for x, y, b, out in zip(x_vals, y_vals, b_vals, outlier_vals)
+            ]
             datasets.append({
                 'label': f'{x_col} vs {y_col}',
                 'data': pts,
