@@ -22,7 +22,8 @@ from .legacy_engine import (
     DataQualityEngine,
     LTTBDownsampler,
     DataImportPipeline,
-    clear_dataset_cache
+    clear_dataset_cache,
+    _df_cache
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     'LTTBDownsampler',
     'DataImportPipeline',
     'clear_dataset_cache',
+    '_df_cache',
 ]
