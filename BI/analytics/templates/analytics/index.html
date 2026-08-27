@@ -153,10 +153,10 @@
             <div id="fields-tree-container" style="display:none;"></div>
 
             <!-- Center Report Canvas Grid -->
-            <section class="pbi-canvas-area" style="flex:1; display:flex; flex-direction:column; padding:1rem; overflow-y:auto;">
+            <section class="pbi-canvas-area" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden;">
 
                 <!-- Dynamic Slicers Filter Bar (Spans 100% Full Width across Top of Canvas) -->
-                <div class="slicers-bar" id="slicers-bar" style="width:100%; display:flex; align-items:center; justify-content:flex-start; gap:1.8rem; margin-bottom:0.8rem; background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.08); padding:0.6rem 1rem; border-radius:var(--radius-md);">
+                <div class="slicers-bar" id="slicers-bar">
                     <div style="display:flex; align-items:center; gap:0.6rem;">
                         <div class="slicers-label" style="font-weight:600; color:var(--primary); white-space:nowrap;">
                             <i class="fa-solid fa-filter text-accent"></i> Active Slicers:
@@ -165,24 +165,46 @@
                             <span class="no-slicers-text" style="color:var(--text-muted); font-size:0.8rem;">No active filters (click chart elements to cross-filter)</span>
                         </div>
                     </div>
-                    <button id="btn-clear-slicers" title="Clear All Slicers" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#f87171; padding:4px 12px; border-radius:14px; font-size:0.75rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; white-space:nowrap; margin-left:1.5rem;">
+                    <button id="btn-clear-slicers" title="Clear All Slicers" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#f87171; padding:4px 12px; border-radius:14px; font-size:0.75rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; white-space:nowrap; margin-left:auto;">
                         <i class="fa-solid fa-filter-circle-xmark" style="font-size:0.8rem;"></i>
                         <span>Clear Filters</span>
                     </button>
                 </div>
 
-
-
-                <!-- Interactive Visual Canvas (Spans 100% Full Width across Viewport) -->
-                <div class="pbi-canvas-grid" id="canvas-grid" style="width:100%; display:grid; grid-template-columns:repeat(12, 1fr); gap:1rem;">
+                <!-- Interactive Visual Canvas -->
+                <div class="pbi-canvas-grid" id="canvas-grid">
                     <!-- Dynamic Visual Cards will be rendered here -->
+                </div>
+
+                <!-- Bottom Multi-Page Report Tab Bar (Power BI Desktop Style) -->
+                <div class="pbi-bottom-tab-bar" id="pbi-bottom-bar">
+                    <div class="page-tabs-scroll-wrapper" id="page-tabs-container">
+                        <button class="page-tab active" data-page="Page 1" title="Double click to rename page">
+                            <i class="fa-regular fa-file-lines"></i>
+                            <span class="page-tab-name">Page 1</span>
+                        </button>
+                    </div>
+                    <button class="btn-add-page" id="btn-add-page" title="Add New Page (+)">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <div class="pbi-status-bar">
+                        <div class="status-item" id="status-page-info">
+                            <i class="fa-solid fa-layer-group"></i> <span>Page 1 of 1</span>
+                        </div>
+                        <div class="status-item" id="status-zoom-display" style="cursor:pointer;" title="Fit Canvas to Viewport">
+                            <i class="fa-solid fa-magnifying-glass"></i> Fit to page
+                        </div>
+                        <div class="status-item" id="status-active-dataset-badge">
+                            <span class="status-dot"></span> <span id="status-dataset-name">Telemetry Live</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
 
             <!-- Right Visualizations & Field Mapping Pane -->
             <aside class="pbi-viz-pane">
-                <!-- Right Pane Tab Toggle -->
+                <!-- Right Pane Tab Toggle (Visualizations / Filters) -->
                 <div class="right-pane-tabs">
                     <button class="right-pane-tab active" id="tab-viz-pane" title="Visualizations">
                         <i class="fa-solid fa-sliders"></i> Visualizations
@@ -193,69 +215,191 @@
                 </div>
 
                 <!-- Panel: Visualizations -->
-                <div id="panel-viz" class="right-pane-panel active">
-                    <div class="viz-panel-mode-bar"
-                        style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-                        <span id="viz-mode-status" style="font-size:0.75rem; font-weight:600; color:var(--text-muted);">
-                            <i class="fa-solid fa-plus text-primary"></i> Mode: New Visual
-                        </span>
-                        <button class="btn btn-xs btn-outline" id="btn-reset-viz-form"
-                            style="display:none; padding: 2px 8px; font-size: 0.72rem;">
-                            <i class="fa-solid fa-plus"></i> + New Visual
+                <div id="panel-viz" class="right-pane-panel active" style="padding:0; gap:0;">
+                    
+                    <!-- Sub-tabs: Build Visual 📊 vs Format Visual 🖌️ -->
+                    <div class="viz-subtab-bar">
+                        <button class="viz-subtab active" id="subtab-btn-build" title="Build visual fields & buckets">
+                            <i class="fa-solid fa-chart-column"></i> Build
+                        </button>
+                        <button class="viz-subtab" id="subtab-btn-format" title="Format visual styling & colors">
+                            <i class="fa-solid fa-paintbrush"></i> Format
                         </button>
                     </div>
 
-                    <!-- Visual Type Picker — Scatter Plot default -->
-                    <div class="viz-type-grid viz-type-grid-1col" id="viz-type-picker">
-                        <div class="viz-type-btn active" data-type="scatter" title="Scatter Plot">
-                            <i class="fa-solid fa-circle-dot text-primary"></i>
-                            <span class="viz-type-label">Scatter Plot</span>
+                    <!-- SUBTAB 1: BUILD VISUAL -->
+                    <div id="subtab-content-build" style="padding:0.85rem; display:flex; flex-direction:column; gap:0.85rem; overflow-y:auto; flex:1;">
+                        <div class="viz-panel-mode-bar"
+                            style="display:flex; align-items:center; justify-content:space-between;">
+                            <span id="viz-mode-status" style="font-size:0.75rem; font-weight:600; color:var(--text-muted);">
+                                <i class="fa-solid fa-plus text-primary"></i> Mode: New Visual
+                            </span>
+                            <button class="btn btn-xs btn-outline" id="btn-reset-viz-form"
+                                style="display:none; padding: 2px 8px; font-size: 0.72rem;">
+                                <i class="fa-solid fa-plus"></i> + New Visual
+                            </button>
+                        </div>
+
+                        <!-- Visual Type Picker -->
+                        <div class="viz-type-grid viz-type-grid-1col" id="viz-type-picker">
+                            <div class="viz-type-btn active" data-type="scatter" title="Scatter Plot">
+                                <i class="fa-solid fa-circle-dot text-primary"></i>
+                                <span class="viz-type-label">Scatter Plot Telemetry</span>
+                            </div>
+                        </div>
+
+                        <!-- Field Mapping Inputs -->
+                        <div class="viz-field-buckets">
+                            <div class="bucket-item">
+                                <label>Visual Title</label>
+                                <input type="text" id="viz-title-input" class="pbi-input"
+                                    placeholder="e.g. PFO vs Rectified Power">
+                            </div>
+
+                            <div class="bucket-item" id="bucket-x-axis">
+                                <label><i class="fa-solid fa-arrow-right-arrow-left text-primary"></i> X-Axis / Category Field</label>
+                                <select id="viz-x-select" class="pbi-select">
+                                    <option value="">Select X-Axis Field</option>
+                                </select>
+                            </div>
+
+                            <div class="bucket-item">
+                                <label><i class="fa-solid fa-arrow-up text-success"></i> Y-Axis / Value Field</label>
+                                <select id="viz-y-select" class="pbi-select">
+                                    <option value="">Select Y-Axis Field</option>
+                                </select>
+                            </div>
+
+                            <div class="bucket-item" id="bucket-group-by">
+                                <label><i class="fa-solid fa-layer-group text-info"></i> Legend / Group By (Series)</label>
+                                <select id="viz-group-select" class="pbi-select">
+                                    <option value="">None (Single Series)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="viz-actions">
+                            <button class="btn btn-warning btn-block" id="btn-save-widget">
+                                <i class="fa-solid fa-chart-line"></i> <span id="lbl-save-widget">Add Visual to Canvas</span>
+                            </button>
+                            <button class="btn btn-secondary btn-block" id="btn-trigger-forecast" style="margin-top: 6px;">
+                                <i class="fa-solid fa-crystal-ball text-accent"></i> AI Time-Series Forecast
+                            </button>
+                            <button class="btn btn-danger btn-block" id="btn-delete-widget"
+                                style="display:none; margin-top: 6px;">
+                                <i class="fa-solid fa-trash"></i> Delete Selected Visual
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Field Mapping Inputs -->
-                    <div class="viz-field-buckets">
-                        <div class="bucket-item">
-                            <label>Visual Title</label>
-                            <input type="text" id="viz-title-input" class="pbi-input"
-                                placeholder="e.g. PFO vs Rectified Power">
+                    <!-- SUBTAB 2: FORMAT VISUAL (Power BI Paintbrush Tab) -->
+                    <div id="subtab-content-format" style="display:none; padding:0.85rem; flex-direction:column; gap:0.75rem; overflow-y:auto; flex:1;">
+                        <div class="format-accordion-group">
+                            <!-- Accordion 1: Visual Title & Header -->
+                            <div class="format-section expanded" id="fmt-sec-title">
+                                <div class="format-header" onclick="this.parentElement.classList.toggle('expanded')">
+                                    <span><i class="fa-solid fa-heading text-warning"></i> Visual Title</span>
+                                    <i class="fa-solid fa-chevron-down chevron"></i>
+                                </div>
+                                <div class="format-body">
+                                    <div class="format-row">
+                                        <label>Title Text:</label>
+                                    </div>
+                                    <input type="text" id="fmt-title-input" class="pbi-input" placeholder="Visual Title">
+                                    <div class="format-row" style="margin-top:4px;">
+                                        <label>Font Size:</label>
+                                        <select id="fmt-title-size" class="pbi-select select-sm" style="width:90px;">
+                                            <option value="12">12 px</option>
+                                            <option value="14" selected>14 px</option>
+                                            <option value="16">16 px</option>
+                                            <option value="18">18 px</option>
+                                            <option value="20">20 px</option>
+                                        </select>
+                                    </div>
+                                    <div class="format-row">
+                                        <label>Alignment:</label>
+                                        <div style="display:flex; gap:3px;">
+                                            <button type="button" class="btn btn-xs btn-outline active" id="fmt-align-left" title="Left"><i class="fa-solid fa-align-left"></i></button>
+                                            <button type="button" class="btn btn-xs btn-outline" id="fmt-align-center" title="Center"><i class="fa-solid fa-align-center"></i></button>
+                                            <button type="button" class="btn btn-xs btn-outline" id="fmt-align-right" title="Right"><i class="fa-solid fa-align-right"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Accordion 2: Gridlines & Axes -->
+                            <div class="format-section expanded" id="fmt-sec-axes">
+                                <div class="format-header" onclick="this.parentElement.classList.toggle('expanded')">
+                                    <span><i class="fa-solid fa-border-all text-info"></i> Gridlines & Axes</span>
+                                    <i class="fa-solid fa-chevron-down chevron"></i>
+                                </div>
+                                <div class="format-body">
+                                    <div class="format-row">
+                                        <label>Show X Gridlines:</label>
+                                        <input type="checkbox" id="fmt-grid-x" checked style="accent-color:var(--pbi-yellow);">
+                                    </div>
+                                    <div class="format-row">
+                                        <label>Show Y Gridlines:</label>
+                                        <input type="checkbox" id="fmt-grid-y" checked style="accent-color:var(--pbi-yellow);">
+                                    </div>
+                                    <div class="format-row">
+                                        <label>X-Axis Label:</label>
+                                    </div>
+                                    <input type="text" id="fmt-x-title" class="pbi-input" placeholder="Auto Label">
+                                    <div class="format-row">
+                                        <label>Y-Axis Label:</label>
+                                    </div>
+                                    <input type="text" id="fmt-y-title" class="pbi-input" placeholder="Auto Label">
+                                </div>
+                            </div>
+
+                            <!-- Accordion 3: Legend & Labels -->
+                            <div class="format-section expanded" id="fmt-sec-legend">
+                                <div class="format-header" onclick="this.parentElement.classList.toggle('expanded')">
+                                    <span><i class="fa-solid fa-tags text-success"></i> Legend & Series</span>
+                                    <i class="fa-solid fa-chevron-down chevron"></i>
+                                </div>
+                                <div class="format-body">
+                                    <div class="format-row">
+                                        <label>Show Legend:</label>
+                                        <input type="checkbox" id="fmt-show-legend" checked style="accent-color:var(--pbi-yellow);">
+                                    </div>
+                                    <div class="format-row">
+                                        <label>Legend Position:</label>
+                                        <select id="fmt-legend-pos" class="pbi-select select-sm" style="width:110px;">
+                                            <option value="top" selected>Top (Default)</option>
+                                            <option value="bottom">Bottom</option>
+                                            <option value="left">Left</option>
+                                            <option value="right">Right</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Accordion 4: Color Palette -->
+                            <div class="format-section expanded" id="fmt-sec-colors">
+                                <div class="format-header" onclick="this.parentElement.classList.toggle('expanded')">
+                                    <span><i class="fa-solid fa-palette text-accent"></i> Visual Color Palette</span>
+                                    <i class="fa-solid fa-chevron-down chevron"></i>
+                                </div>
+                                <div class="format-body">
+                                    <div class="format-row">
+                                        <label>Theme Palette:</label>
+                                        <select id="fmt-palette-select" class="pbi-select select-sm">
+                                            <option value="pbi_classic">Power BI Gold & Blue</option>
+                                            <option value="fluent_modern">Fluent Modern Vibrant</option>
+                                            <option value="sunset_coral">Sunset Crimson</option>
+                                            <option value="emerald_teal">Emerald & Mint</option>
+                                            <option value="cyber_neon">Cyber Neon</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="bucket-item" id="bucket-x-axis">
-                            <label><i class="fa-solid fa-arrow-right-arrow-left text-primary"></i> X-Axis / Category
-                                Field</label>
-                            <select id="viz-x-select" class="pbi-select">
-                                <option value="">Select X-Axis Field</option>
-                            </select>
-                        </div>
-
-                        <div class="bucket-item">
-                            <label><i class="fa-solid fa-arrow-up text-success"></i> Y-Axis / Value Field</label>
-                            <select id="viz-y-select" class="pbi-select">
-                                <option value="">Select Y-Axis Field</option>
-                            </select>
-                        </div>
-
-                        <div class="bucket-item" id="bucket-group-by">
-                            <label><i class="fa-solid fa-layer-group text-info"></i> Legend / Group By (Color
-                                Series)</label>
-                            <select id="viz-group-select" class="pbi-select">
-                                <option value="">None (Single Series)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Action Button -->
-                    <div class="viz-actions">
-                        <button class="btn btn-primary btn-block" id="btn-save-widget">
-                            <i class="fa-solid fa-chart-line"></i> <span id="lbl-save-widget">Add Visual to Canvas</span>
-                        </button>
-                        <button class="btn btn-warning btn-block" id="btn-trigger-forecast" style="margin-top: 8px;">
-                            <i class="fa-solid fa-crystal-ball"></i> 🔮 AI Time-Series Forecast
-                        </button>
-                        <button class="btn btn-danger btn-block" id="btn-delete-widget"
-                            style="display:none; margin-top: 8px;">
-                            <i class="fa-solid fa-trash"></i> Delete Selected Visual
+                        <button class="btn btn-primary btn-block" id="btn-apply-format" style="margin-top:6px;">
+                            <i class="fa-solid fa-check"></i> Apply Formatting
                         </button>
                     </div>
 
@@ -277,6 +421,29 @@
                 </div><!-- End Panel: Filters -->
 
             </aside>
+        </div>
+
+        <!-- Fullscreen Focus Mode Modal -->
+        <div class="pbi-focus-modal" id="modal-focus-mode">
+            <div class="focus-modal-header">
+                <div style="display:flex; align-items:center; gap:1rem;">
+                    <button class="focus-back-btn" id="btn-focus-back">
+                        <i class="fa-solid fa-arrow-left"></i> Back to report
+                    </button>
+                    <h3 id="focus-modal-title" style="margin:0; font-size:1.05rem; font-weight:700; color:var(--text-main);">Visual Title</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <button class="btn btn-sm btn-outline" id="btn-focus-reset-zoom" title="Reset Zoom View">
+                        <i class="fa-solid fa-arrows-rotate"></i> Reset Zoom
+                    </button>
+                    <button class="btn btn-sm btn-warning" id="btn-focus-export" title="Export Focus Chart Snapshot">
+                        <i class="fa-solid fa-download"></i> Export Chart
+                    </button>
+                </div>
+            </div>
+            <div class="focus-modal-body">
+                <canvas id="focus-canvas" style="width:100%; height:100%;"></canvas>
+            </div>
         </div>
 
         <!-- View Mode 2: DATA TABULAR VIEW -->
