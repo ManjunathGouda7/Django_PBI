@@ -643,7 +643,10 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(len(errs2), 0)
 
     def test_security_dashboard_access_and_unlock(self):
-        admin_user = User.objects.create_user(username='Manjunath', password='ComplexPass99!')
+        admin_user = User.objects.create_user(username='Manjunath', password='ComplexPass99!', is_superuser=True)
+        admin_profile, _ = UserProfile.objects.get_or_create(user=admin_user, defaults={'login_id': 'Manjunath'})
+        admin_profile.login_id = 'Manjunath'
+        admin_profile.save()
         self.client.force_login(admin_user)
 
         target_user = User.objects.create_user(username='targetlock', password='ComplexPass99!')
@@ -657,6 +660,8 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(res.status_code, 200)
 
         # Admin unlocks target
+        res_post = self.client.post(sec_url, {'action': 'unlock', 'user_id': target_profile.id})
+        self.assertEqual(res_post.status_code, 200)
         target_profile.refresh_from_db()
         self.assertEqual(target_profile.status, 'active')
         self.assertEqual(target_profile.failed_login_attempts, 0)
