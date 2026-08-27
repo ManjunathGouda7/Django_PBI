@@ -3,6 +3,33 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Performance Utilities: Debounce & Throttle
+    function debounce(func, wait = 150) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    function throttle(func, limit = 100) {
+        let inThrottle;
+        return function(...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+
+    // Debounced Window Resize Listener
+    window.addEventListener('resize', debounce(() => {
+        Object.values(state.chartInstances).forEach(chart => {
+            if (chart && chart.resize) chart.resize();
+        });
+    }, 200));
+
     // Global State
     const state = {
         dashboards: [],
@@ -1432,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 chartObj.options.scales.y.grid.display = widget.format_config.gridY;
                 if (widget.format_config.yTitle) chartObj.options.scales.y.title.text = widget.format_config.yTitle;
             }
-            chartObj.update();
+            chartObj.update('none');
         }
 
         // Update card title text in DOM
@@ -1651,30 +1678,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (widget.visual_type === 'scatter') {
-            const datasets = (chartData.datasets || []).map((ds, idx) => {
-                const ptBackgrounds = [];
-                const ptBorders = [];
-                const ptRadii = [];
-                const ptHoverRadii = [];
+            const rawDatasets = chartData.datasets || [];
+            const datasets = new Array(rawDatasets.length);
+            for (let idx = 0; idx < rawDatasets.length; idx++) {
+                const ds = rawDatasets[idx];
+                const pts = ds.data || [];
+                const len = pts.length;
+                const ptBackgrounds = new Array(len);
+                const ptBorders = new Array(len);
+                const ptRadii = new Array(len);
+                const ptHoverRadii = new Array(len);
+                const dsColor = ds.color || palette[idx % palette.length];
 
-                (ds.data || []).forEach(pt => {
+                for (let i = 0; i < len; i++) {
+                    const pt = pts[i];
                     const isOutlier = pt.is_outlier || (pt.y > 400) || (pt.x > 22);
                     if (isOutlier) {
-                        ptBackgrounds.push('#ef4444');
-                        ptBorders.push('#ffffff');
-                        ptRadii.push(5.5);
-                        ptHoverRadii.push(9);
+                        ptBackgrounds[i] = '#ef4444';
+                        ptBorders[i] = '#ffffff';
+                        ptRadii[i] = 5.5;
+                        ptHoverRadii[i] = 9;
                     } else {
-                        ptBackgrounds.push(ds.color || palette[idx % palette.length]);
-                        ptBorders.push('transparent');
-                        ptRadii.push(3);
-                        ptHoverRadii.push(6.5);
+                        ptBackgrounds[i] = dsColor;
+                        ptBorders[i] = 'transparent';
+                        ptRadii[i] = 3;
+                        ptHoverRadii[i] = 6.5;
                     }
-                });
+                }
 
-                return {
+                datasets[idx] = {
                     label: ds.label,
-                    data: ds.data,
+                    data: pts,
                     backgroundColor: ptBackgrounds,
                     borderColor: ptBorders,
                     borderWidth: 1,
@@ -1682,7 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointHoverRadius: ptHoverRadii,
                     pointHitRadius: 8
                 };
-            });
+            }
 
             const chartObj = new Chart(canvasEl, {
                 type: 'scatter',
