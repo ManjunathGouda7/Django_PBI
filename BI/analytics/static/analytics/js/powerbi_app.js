@@ -1516,8 +1516,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div class="visual-card-header">
+                <div class="visual-card-header" style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
                     <span class="visual-card-title">${displayTitle}</span>
+                    <span class="visual-card-subtitle" style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">
+                        ${vType === 'scatter' ? 'Normal Operating Envelope vs ⚠️ Outliers Highlighted' : 'Interactive Telemetry Visual'}
+                    </span>
                 </div>
                 <div class="visual-card-body">
                     <canvas id="canvas-widget-${w.id}"></canvas>
@@ -1648,16 +1651,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (widget.visual_type === 'scatter') {
-            const datasets = (chartData.datasets || []).map((ds, idx) => ({
-                label: ds.label,
-                data: ds.data,
-                backgroundColor: ds.color || palette[idx % palette.length],
-                borderColor: 'transparent',
-                borderWidth: 0,
-                pointRadius: 3,
-                pointHoverRadius: 6.5,
-                pointHitRadius: 7.5
-            }));
+            const datasets = (chartData.datasets || []).map((ds, idx) => {
+                const ptBackgrounds = [];
+                const ptBorders = [];
+                const ptRadii = [];
+                const ptHoverRadii = [];
+
+                (ds.data || []).forEach(pt => {
+                    const isOutlier = pt.is_outlier || (pt.y > 400) || (pt.x > 22);
+                    if (isOutlier) {
+                        ptBackgrounds.push('#ef4444');
+                        ptBorders.push('#ffffff');
+                        ptRadii.push(5.5);
+                        ptHoverRadii.push(9);
+                    } else {
+                        ptBackgrounds.push(ds.color || palette[idx % palette.length]);
+                        ptBorders.push('transparent');
+                        ptRadii.push(3);
+                        ptHoverRadii.push(6.5);
+                    }
+                });
+
+                return {
+                    label: ds.label,
+                    data: ds.data,
+                    backgroundColor: ptBackgrounds,
+                    borderColor: ptBorders,
+                    borderWidth: 1,
+                    pointRadius: ptRadii,
+                    pointHoverRadius: ptHoverRadii,
+                    pointHitRadius: 8
+                };
+            });
 
             const chartObj = new Chart(canvasEl, {
                 type: 'scatter',
@@ -1676,7 +1701,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 color: '#94a3b8',
                                 font: { size: 11, weight: '600' },
                                 boxWidth: 10,
-                                usePointStyle: true
+                                usePointStyle: true,
+                                filter: function(item, chartData) {
+                                    // Limit legend entries to top 8 series to prevent crowding
+                                    return item.datasetIndex < 8;
+                                }
                             }
                         },
                         zoom: {
@@ -1695,53 +1724,53 @@ document.addEventListener('DOMContentLoaded', () => {
                             borderWidth: 1,
                             padding: 12,
                             cornerRadius: 8,
-                            displayColors: false,
-                            titleFont: { family: 'monospace', size: 13, weight: '700' },
+                            displayColors: true,
+                            titleFont: { family: 'sans-serif', size: 13, weight: '700' },
                             bodyFont: { family: 'monospace', size: 12, weight: '600' },
                             callbacks: {
                                 title: function(items) {
                                     if (!items || items.length === 0) return '';
                                     const raw = items[0].raw || {};
                                     const boardName = raw.board && raw.board !== 'N/A' ? raw.board : '';
-                                    if (boardName) {
-                                        return `Board: ${boardName}`;
-                                    }
-                                    const groupColName = chartData.group_col || widget.group_by || 'Series';
                                     const groupVal = items[0].dataset ? items[0].dataset.label : '';
-                                    return `${groupColName}: ${groupVal}`;
+                                    return boardName ? `Asset / Board: ${boardName}` : `Series: ${groupVal}`;
                                 },
                                 label: function(context) {
                                     const raw = context.raw || {};
                                     const lines = [];
-                                    const boardName = raw.board && raw.board !== 'N/A' ? raw.board : '';
-
-                                    const groupColName = chartData.group_col || widget.group_by;
-                                    const dsLabel = context.dataset ? context.dataset.label : '';
-                                    if (groupColName && dsLabel && dsLabel !== boardName && !dsLabel.includes(' vs ')) {
-                                        lines.push(`${groupColName}: ${dsLabel}`);
-                                    }
-
                                     const xAxisName = fmt.xTitle || chartData.x_col || widget.x_axis || 'X-Axis';
-                                    const xVal = context.parsed.x !== undefined ? context.parsed.x : (raw && raw.x);
-                                    lines.push(`${xAxisName}: ${xVal}`);
-
                                     const yAxisName = fmt.yTitle || chartData.y_col || widget.y_axis || 'Y-Axis';
+                                    const xVal = context.parsed.x !== undefined ? context.parsed.x : (raw && raw.x);
                                     const yVal = context.parsed.y !== undefined ? context.parsed.y : (raw && raw.y);
-                                    lines.push(`${yAxisName}: ${yVal}`);
 
-                                    if (raw.received_power !== undefined && raw.received_power !== null && !xAxisName.toLowerCase().includes('received') && !yAxisName.toLowerCase().includes('received')) {
-                                        lines.push(`Received Power [W]: ${raw.received_power}`);
-                                    }
-                                    if (raw.rectified_power !== undefined && raw.rectified_power !== null && !xAxisName.toLowerCase().includes('rectified') && !yAxisName.toLowerCase().includes('rectified')) {
-                                        lines.push(`Rectified Power [W]: ${raw.rectified_power}`);
-                                    }
-                                    if (raw.pfo !== undefined && raw.pfo !== null && !xAxisName.toLowerCase().includes('pfo') && !yAxisName.toLowerCase().includes('pfo')) {
-                                        lines.push(`PFO [mW]: ${raw.pfo}`);
+                                    lines.push(` ⚡ ${xAxisName}: ${xVal}`);
+                                    lines.push(` 📈 ${yAxisName}: ${yVal}`);
+
+                                    if (raw.dut) lines.push(` 🏷️ DUT: ${raw.dut}`);
+                                    if (raw.duty) lines.push(` ⏱️ Duty: ${raw.duty}`);
+                                    
+                                    const isOutlier = raw.is_outlier || (yVal > 400) || (xVal > 22);
+                                    if (isOutlier) {
+                                        lines.push(` ⚠️ Status: OUTLIER FLAGGED (Abnormal Cluster)`);
+                                    } else {
+                                        lines.push(` ✅ Status: Normal Operating Envelope`);
                                     }
 
                                     return lines;
                                 }
                             }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: fmt.logScale ? 'logarithmic' : 'linear',
+                            title: { display: true, text: widget.format_config?.xTitle || widget.x_axis || 'X-Axis', color: '#94a3b8' },
+                            grid: { display: widget.format_config?.gridX !== false, color: 'rgba(255, 255, 255, 0.08)' }
+                        },
+                        y: {
+                            type: fmt.logScale ? 'logarithmic' : 'linear',
+                            title: { display: true, text: widget.format_config?.yTitle || widget.y_axis || 'Y-Axis', color: '#94a3b8' },
+                            grid: { display: widget.format_config?.gridY !== false, color: 'rgba(255, 255, 255, 0.08)' }
                         }
                     },
                     onClick: (evt, activeElements) => {
