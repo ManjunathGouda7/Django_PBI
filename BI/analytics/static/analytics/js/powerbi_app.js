@@ -783,18 +783,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.activeDataset || !state.activeDataset.column_schema) return;
         const schema = state.activeDataset.column_schema;
 
-        // Key columns for Power BI filter cards
-        const targetCols = ['Board', 'PowerMode', 'Power', 'DUT', 'CRX', 'Position', 'RUN'];
+        // Default 7 core Power BI telemetry filter fields
+        const targetCols = ['Board', 'DUT', 'RUN', 'CRX', 'Position', 'PowerMode', 'Power'];
 
-        // Pick categorical columns matching targetCols or non-blacklisted categorical cols
-        const allFilterCols = schema
-            .map(c => c.name)
-            .filter(n => !FILTER_COL_BLACKLIST.includes(n) && (targetCols.includes(n) || schema.find(c => c.name === n)?.type === 'categorical'));
+        // Filter to available dataset columns matching targetCols (preserving priority order)
+        const schemaColNames = schema.map(c => c.name);
+        const filterCols = targetCols.filter(name => schemaColNames.includes(name));
 
-        const uniqueFilterCols = [...new Set(allFilterCols)];
+        // If dataset has other categorical columns not in targetCols, append them
+        schema.forEach(c => {
+            if (c.type === 'categorical' && !targetCols.includes(c.name) && !FILTER_COL_BLACKLIST.includes(c.name)) {
+                filterCols.push(c.name);
+            }
+        });
+
+        const uniqueFilterCols = [...new Set(filterCols)];
 
         if (uniqueFilterCols.length === 0) {
-            elements.filterCardsContainer.innerHTML = '<div class="empty-state">No categorical columns found for filtering.</div>';
+            elements.filterCardsContainer.innerHTML = '<div class="empty-state">No filterable columns found.</div>';
             return;
         }
 
