@@ -111,6 +111,16 @@
                     style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3);">
             </div>
         </div>
+        <div class="ribbon-tab-layout"
+            style="display:flex; align-items:center; gap:0.3rem; font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
+            <i class="fa-solid fa-table-cells-large text-accent"></i> Canvas:
+            <select id="canvas-layout-select" class="pbi-select select-sm" style="padding:2px 6px; font-size:0.75rem;">
+                <option value="fluid">12-Col Fluid</option>
+                <option value="2x2">2×2 Grid</option>
+                <option value="16-9">16:9 Presentation</option>
+            </select>
+        </div>
+
         <div class="ribbon-tab-auto-refresh"
             style="display:flex; align-items:center; gap:0.4rem; margin-left:auto; font-size:0.78rem; color:var(--text-muted);">
             <i class="fa-solid fa-clock text-warning"></i> Live Auto-Refresh:
@@ -169,6 +179,38 @@
                         <i class="fa-solid fa-filter-circle-xmark" style="font-size:0.8rem;"></i>
                         <span>Clear Filters</span>
                     </button>
+                </div>
+
+                <!-- Live Telemetry KPI Summary Bar -->
+                <div class="telemetry-summary-bar" id="telemetry-summary-bar">
+                    <div class="telemetry-stat-card">
+                        <div class="stat-info">
+                            <span class="stat-label">Total Records</span>
+                            <span class="stat-value" id="stat-total-rows">37,842</span>
+                        </div>
+                        <span class="stat-badge success"><i class="fa-solid fa-circle-check"></i> Online</span>
+                    </div>
+                    <div class="telemetry-stat-card">
+                        <div class="stat-info">
+                            <span class="stat-label">Mean PFO Metric</span>
+                            <span class="stat-value" id="stat-mean-pfo">31.4 mW</span>
+                        </div>
+                        <span class="stat-badge info"><i class="fa-solid fa-chart-line"></i> Nominal</span>
+                    </div>
+                    <div class="telemetry-stat-card">
+                        <div class="stat-info">
+                            <span class="stat-label">DUT / Board Count</span>
+                            <span class="stat-value" id="stat-board-count">9 Boards</span>
+                        </div>
+                        <span class="stat-badge warning"><i class="fa-solid fa-microchip"></i> Active</span>
+                    </div>
+                    <div class="telemetry-stat-card">
+                        <div class="stat-info">
+                            <span class="stat-label">Avg Rectified Power</span>
+                            <span class="stat-value" id="stat-avg-power">4.82 W</span>
+                        </div>
+                        <span class="stat-badge success"><i class="fa-solid fa-bolt"></i> Optimal</span>
+                    </div>
                 </div>
 
                 <!-- Interactive Visual Canvas -->
