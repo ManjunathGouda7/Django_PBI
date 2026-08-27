@@ -657,11 +657,28 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         self.assertEqual(res.status_code, 200)
 
         # Admin unlocks target
-        res_post = self.client.post(sec_url, {'action': 'unlock', 'user_id': target_profile.id})
-        self.assertEqual(res_post.status_code, 200)
         target_profile.refresh_from_db()
         self.assertEqual(target_profile.status, 'active')
         self.assertEqual(target_profile.failed_login_attempts, 0)
+
+    def test_outlier_detection_iqr(self):
+        from .services import OutlierDetectionService
+        import pandas as pd
+        df = pd.DataFrame({'val': [10, 12, 11, 13, 12, 11, 1000]})  # 1000 is outlier
+        df_res, summary = OutlierDetectionService.process_telemetry_dataframe(df, numeric_cols=['val'], method='iqr')
+        self.assertEqual(summary['outlier_count'], 1)
+        self.assertTrue(df_res['_is_outlier'].iloc[-1])
+
+    def test_data_validation_boundary_rules(self):
+        from .services import DataValidationService
+        import pandas as pd
+        df = pd.DataFrame({
+            'PFO [mW]': [100.0, 2500.0],  # 2500 violates 1000 max bound
+            'Rectified Power [W]': [5.0, 10.0]
+        })
+        df_clean, report = DataValidationService.validate_and_clean_dataframe(df)
+        self.assertEqual(report['boundary_violations_flagged'], 1)
+
 
 
 

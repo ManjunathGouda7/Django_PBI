@@ -396,6 +396,24 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Accordion 5: Data Quality & Outlier Controls -->
+                            <div class="format-section expanded" id="fmt-sec-data-quality">
+                                <div class="format-header" onclick="this.parentElement.classList.toggle('expanded')">
+                                    <span><i class="fa-solid fa-shield-virus text-warning"></i> Data Quality & Outliers</span>
+                                    <i class="fa-solid fa-chevron-down chevron"></i>
+                                </div>
+                                <div class="format-body">
+                                    <div class="format-row">
+                                        <label>Hide Outliers (Clean View):</label>
+                                        <input type="checkbox" id="fmt-hide-outliers" style="accent-color:var(--pbi-yellow);">
+                                    </div>
+                                    <div class="format-row">
+                                        <label>Logarithmic Y-Axis Scale:</label>
+                                        <input type="checkbox" id="fmt-log-scale" style="accent-color:var(--pbi-yellow);">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <button class="btn btn-primary btn-block" id="btn-apply-format" style="margin-top:6px;">

@@ -1,0 +1,8 @@
+WARNING 2026-08-27 17:33:54,263 [analytics.views:106] Failed login attempt for User ID: 'unknown_user'
+INFO 2026-08-27 17:33:57,351 [analytics.views:86] User 'john' (User ID: 'secret-john') logged in successfully.
+INFO 2026-08-27 17:33:58,855 [analytics.views:86] User 'john' (User ID: 'john') logged in successfully.
+INFO 2026-08-27 17:34:08,882 [analytics.tasks:55] Async dataset upload processing finished for dataset 1
+INFO 2026-08-27 17:34:16,660 [analytics.tasks:89] Scheduled refresh succeeded for dataset 1 (Schedule 1)
+WARNING 2026-08-27 17:34:30,648 [analytics.views:106] Failed login attempt for User ID: 'unknown_user'
+INFO 2026-08-27 17:34:38,610 [analytics.views:86] User 'john' (User ID: 'secret-john') logged in successfully.
+INFO 2026-08-27 17:34:41,888 [analytics.views:86] User 'john' (User ID: 'john') logged in successfully.
