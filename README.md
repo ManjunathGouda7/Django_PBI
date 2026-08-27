@@ -1,133 +1,81 @@
-# ⚡ Apex BI Studio — Django Telemetry Analytics Platform
+# Apex BI Studio - Telemetry Analytics Platform
 
-An enterprise-grade, high-performance telemetry analytics platform and interactive visual dashboard engine built with **Django 6.1**, **Django REST Framework**, **Pandas**, **NumPy**, **PyMongo**, and **Chart.js**.
-
----
-
-## 🌟 Executive Features & Capabilities
-
-- 📊 **Vectorized Scatter Telemetry Engine**: C-level `np.round()` serialization processing 37,500+ telemetry points in **~15ms**.
-- 🔌 **MongoDB Server Connector & Offline Fallback**: Direct 500ms connection to MongoDB servers with offline fallback to local JSON dataset (`280,275 records`).
-- 🔐 **Hardened Authentication & Security**: Route protection via `@login_required`, live password match confirmation, PBKDF2+SHA256 database password hashing, and Open Redirect protection.
-- 👑 **Role-Based Access Control (RBAC)**: Supports `Administrator`, `Data Analyst`, and `Report Viewer` roles via `UserProfile` model.
-- 🪄 **Natural Language Telemetry AI Q&A Assistant**: Instant query parsing in top ribbon header to auto-filter slicers and report cards.
-- 📐 **Statistical Target Specification Limits**: Dynamic calculation of 2-sigma upper and lower specification threshold lines.
-- 🛠️ **OpenAPI 3.0 Interactive Swagger Spec**: Live interactive API documentation at `/api/swagger/` and `/api/redoc/`.
-- ⏱️ **1-Click CSV Export & Live Auto-Refresh**: Instant CSV telemetry streaming and automated polling options (5s, 10s, 30s).
-- 🐋 **DevOps Docker Containerization**: Multi-stage `Dockerfile`, `docker-compose.yml` (Django, MongoDB, Redis), and GitHub Actions CI/CD pipeline.
+An enterprise-grade telemetry analytics & interactive dashboard platform built with **Django**, **Django REST Framework (DRF)**, **Pandas**, and **Chart.js**. Replicates Microsoft Power BI Desktop styling, multi-page reports, dynamic slicers, format panes, and automated data quality validation & outlier detection.
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+## 🌟 Architecture Highlights
 
-| Layer | Technologies Used |
-| :--- | :--- |
-| **Backend Core** | Django 6.1, Gunicorn WSGI Server, Python 3.11+ |
-| **REST API Engine** | Django REST Framework (DRF), JWT SimpleJWT, DRF Yasg (Swagger) |
-| **Data Engine** | Pandas, NumPy, PyMongo |
-| **Caching & Async Tasks**| Redis Cache, Celery Async Task Workers |
-| **Frontend UI Shell** | Vanilla JavaScript (ES6+), CSS3 Obsidian Dark & Light Design System, Chart.js with Zoom Plugin |
-| **Database** | SQLite3 (Development) / PostgreSQL (Production) |
-| **DevOps & CI/CD** | Docker, Docker Compose, GitHub Actions Pipeline |
+### 1. Data Quality & Outlier Detection Engine
+- **Multi-Algorithm Outlier Detection**:
+  - **IQR (Interquartile Range)**: Identifies extreme value spikes beyond $1.5 \times IQR$ and $3.0 \times IQR$.
+  - **Z-Score & Modified MAD**: Robust outlier detection for non-Gaussian wireless telemetry metrics.
+- **Validation Pipeline**:
+  - Min/Max numerical boundary constraints (e.g. $0 \le \text{PFO} \le 1000\text{mW}$).
+  - Automatic duplicate row detection and removal.
+  - Standardized unit mapping (`PFO [mW]`, `Rectified Power [W]`, `Received Power [W]`).
+
+### 2. Service-Oriented Architecture
+Clean separation of domain concerns in `BI/analytics/services/`:
+- `data_import_service.py`: Automated ingestion of CSV, Excel, and JSON datasets.
+- `data_validation_service.py`: Schema verification and data quality rules.
+- `outlier_detection_service.py`: Outlier detection algorithms.
+- `dashboard_service.py`: Fast chart aggregations, 2-sigma limit lines, and Chart.js payloads.
+
+### 3. Modular Settings Architecture
+Split Django configuration in `BI/BI/settings/`:
+- `base.py`: Shared core configuration, app registry, security middleware, and logging.
+- `development.py`: SQLite fallback, debug logging, and relaxed CORS.
+- `production.py`: Strict SSL/HTTPS headers, database URL parsing, and environment secrets.
 
 ---
 
-## ⚙️ Local Development & Setup Guide
+## 🚀 Quickstart Guide
 
-### 1. Prerequisites
-- Python 3.10+
-- Virtual environment (`mgenv` or `venv`)
-- Git
-
-### 2. Quick Setup Commands
+### 1. Local Development Setup
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/ManjunathGouda7/Django_PBI.git
 cd Django_PBI
 
-# Activate virtual environment (Windows PowerShell)
-d:\Manju\PowerBI_Django\mgenv\Scripts\activate
+# Activate virtual environment
+mgenv\Scripts\activate  # Windows
+source mgenv/bin/activate  # Linux/Mac
 
-# Install pinned production dependencies
-pip install -r requirements.txt
+# Run Django system check & migrations
+python BI/manage.py check
+python BI/manage.py migrate
 
-# Run database migrations
-cd BI
-python manage.py migrate
-
-# Create admin superuser (optional)
-python manage.py createsuperuser
-
-# Start Django development server
-python manage.py runserver 0.0.0.0:8000
+# Launch local server
+python BI/manage.py runserver
 ```
 
-Access the platform in your browser:
-- **Main Studio App**: `http://127.0.0.1:8000/`
-- **Login Portal**: `http://127.0.0.1:8000/login/`
-- **Swagger Interactive API Spec**: `http://127.0.0.1:8000/api/swagger/`
-- **ReDoc API Spec**: `http://127.0.0.1:8000/api/redoc/`
-- **Django Admin**: `http://127.0.0.1:8000/admin/`
-
----
-
-## 🧪 Running Automated Unit Tests
-
-To run the automated Django test suite covering models, schema inference, permissions, and auth views:
-
+### 2. Docker Deployment
 ```bash
-python manage.py test analytics
+docker-compose up --build
 ```
+Access the application at `http://localhost:8000`.
 
 ---
 
-## 🐋 Running with Docker & Docker Compose
+## 🧪 Testing Suite
 
-Launch Django App, MongoDB server, and Redis cache with 1 command:
-
+Run full automated unit and integration tests:
 ```bash
-# Launch multi-container stack
-docker-compose up -d --build
-
-# View container logs
-docker-compose logs -f web
-
-# Shutdown stack
-docker-compose down
+python BI/manage.py test analytics
 ```
 
 ---
 
-## 🔐 Environment Variables Reference (`.env`)
+## 📐 Data Contract Schema
 
-Create a `.env` file in the project root:
+Telemetry datasets exported to or consumed by Power BI Studio adhere to standard field names:
 
-```ini
-DEBUG=False
-SECRET_KEY=your-production-django-secret-key-here
-ALLOWED_HOSTS=127.0.0.1,localhost
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:8000
-MONGODB_URL=mongodb://localhost:27017
-REDIS_URL=redis://localhost:6379/1
-LOG_LEVEL=INFO
-```
-
----
-
-## 📡 REST API Reference
-
-| Endpoint | Method | Description |
-| :--- | :---: | :--- |
-| **`/api/v1/datasets/`** | `GET` / `POST` | List and upload telemetry datasets |
-| **`/api/v1/dashboards/`** | `GET` / `POST` | List and create visual dashboards |
-| **`/api/v1/widgets/`** | `GET` / `POST` / `PUT` / `DELETE` | Visual card CRUD operations |
-| **`/api/token/`** | `POST` | Obtain JWT Access and Refresh Tokens |
-| **`/api/swagger/`** | `GET` | Interactive Swagger API documentation |
-| **`/export-csv/<dataset_id>/`** | `GET` | 1-Click CSV telemetry data stream |
-
----
-
-## 📄 License & Author
-
-Developed by **Manjunath Gouda** (`ManjunathGouda7`).
-Licensed under the **MIT License**.
+| Metric Name | Unit | Field Key | Description |
+| :--- | :--- | :--- | :--- |
+| `Timestamp` | Seconds | `Timestamp [Sec]` | Test run time vector |
+| `Rectified Power` | Watts | `Rectified Power [W]` | Output DC power |
+| `Received Power` | Watts | `Received Power [W]` | Input RF power |
+| `PFO Metric` | mW | `PFO [mW]` | Peak power offset metric |
+| `Board` | Text | `Board` | DUT / Board Identifier |
+| `Outlier Flag` | Boolean | `_is_outlier` | Outlier indicator flag |

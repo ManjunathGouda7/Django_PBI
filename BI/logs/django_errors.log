@@ -405,3 +405,23 @@ Traceback (most recent call last):
     locked_users = UserProfile.objects.filter(Q(status='locked') | Q(locked_until__gt=timezone.now())).count()
                                                                                       ^^^^^^^^
 NameError: name 'timezone' is not defined
+ERROR 2026-08-27 15:53:52,141 [django.request:283] Internal Server Error: /favicon.ico
+Traceback (most recent call last):
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\exception.py", line 56, in inner
+    response = get_response(request)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\base.py", line 199, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\Manju\PowerBI_Django\BI\analytics\views.py", line 242, in favicon_view
+    return HttpResponse(svg_icon, content_type="image/svg+xml")
+           ^^^^^^^^^^^^
+NameError: name 'HttpResponse' is not defined
+ERROR 2026-08-27 16:06:26,231 [django.request:283] Internal Server Error: /favicon.ico
+Traceback (most recent call last):
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\exception.py", line 56, in inner
+    response = get_response(request)
+  File "D:\Manju\PowerBI_Django\mgenv\Lib\site-packages\django\core\handlers\base.py", line 199, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\Manju\PowerBI_Django\BI\analytics\views.py", line 242, in favicon_view
+    return HttpResponse(svg_icon, content_type="image/svg+xml")
+           ^^^^^^^^^^^^
+NameError: name 'HttpResponse' is not defined

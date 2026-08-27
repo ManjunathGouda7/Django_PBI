@@ -277,7 +277,7 @@ class DatasetEngine:
         and schema, and pushes to MongoDB if available.
         """
         import json
-        from .models import Dataset
+        from analytics.models import Dataset
 
         # 1. Parse input file to DataFrame
         if hasattr(input_file, 'name'):
@@ -844,7 +844,7 @@ class RowLevelSecurityEngine:
         if not user or not user.is_authenticated or user.is_staff:
             return df
 
-        from .models import RowLevelSecurityRule
+        from analytics.models import RowLevelSecurityRule
         rules = RowLevelSecurityRule.objects.filter(dataset=dataset, is_active=True)
         user_rules = rules.filter(user=user)
         
@@ -911,7 +911,7 @@ class AuditLogger:
     @staticmethod
     def log_action(user, action_type, resource_type, resource_id, details=None, request=None):
         try:
-            from .models import ActivityLog
+            from analytics.models import ActivityLog
             ip_address = '127.0.0.1'
             user_agent = ''
 
@@ -1044,7 +1044,7 @@ class EmployeeIdGeneratorService:
     """Generates sequential Employee User IDs (e.g. EMP-1001, EMP-1002)"""
     @staticmethod
     def generate_next_id(prefix="EMP-", start_seq=1001):
-        from .models import UserProfile
+        from analytics.models import UserProfile
         from django.db.models import Q
         import re
 
@@ -1098,7 +1098,7 @@ class PasswordPolicyService:
 
     @classmethod
     def check_password_history(cls, user, new_raw_password):
-        from .models import PasswordHistory
+        from analytics.models import PasswordHistory
         from django.contrib.auth.hashers import check_password
 
         if check_password(new_raw_password, user.password):
@@ -1112,7 +1112,7 @@ class PasswordPolicyService:
 
     @classmethod
     def record_password_change(cls, user, new_raw_password):
-        from .models import PasswordHistory, UserProfile
+        from analytics.models import PasswordHistory, UserProfile
         from django.utils import timezone
 
         PasswordHistory.objects.create(
@@ -1151,7 +1151,7 @@ class SchemaDriftDetector:
     """Compares incoming dataframe columns with existing DatasetColumn signatures"""
     @staticmethod
     def detect_drift(dataset, new_df):
-        from .models import DatasetColumn
+        from analytics.models import DatasetColumn
         existing_cols = {col.name: col for col in dataset.columns.all()}
         new_cols = set(new_df.columns)
 
@@ -1178,7 +1178,7 @@ class DataQualityEngine:
     """Calculates data health score, completeness %, and profiling metrics"""
     @staticmethod
     def generate_quality_report(dataset, df):
-        from .models import DataQualityReport
+        from analytics.models import DataQualityReport
         total_rows = len(df)
         total_cols = len(df.columns)
 
@@ -1290,7 +1290,7 @@ class DataImportPipeline:
     """Multi-stage enterprise dataset ingestion pipeline"""
     @classmethod
     def ingest_dataframe(cls, dataset, df, user=None):
-        from .models import DatasetVersion, DatasetColumn
+        from analytics.models import DatasetVersion, DatasetColumn
         # Stage 1: Sanitize columns
         clean_df = DatasetValidator.sanitize_columns(df)
 

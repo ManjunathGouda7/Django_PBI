@@ -112,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
         fmtShowLegend: document.getElementById('fmt-show-legend'),
         fmtLegendPos: document.getElementById('fmt-legend-pos'),
         fmtPaletteSelect: document.getElementById('fmt-palette-select'),
+        fmtHideOutliers: document.getElementById('fmt-hide-outliers'),
+        fmtLogScale: document.getElementById('fmt-log-scale'),
         btnApplyFormat: document.getElementById('btn-apply-format'),
 
         // Fullscreen Focus Mode Modal
@@ -1376,6 +1378,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.fmtShowLegend) elements.fmtShowLegend.checked = fmt.showLegend !== false;
         if (elements.fmtLegendPos) elements.fmtLegendPos.value = fmt.legendPos || 'top';
         if (elements.fmtPaletteSelect) elements.fmtPaletteSelect.value = fmt.palette || 'pbi_classic';
+        if (elements.fmtHideOutliers) elements.fmtHideOutliers.checked = fmt.hideOutliers === true;
+        if (elements.fmtLogScale) elements.fmtLogScale.checked = fmt.logScale === true;
     }
 
     // Apply Formatting Changes
@@ -1398,6 +1402,8 @@ document.addEventListener('DOMContentLoaded', () => {
         widget.format_config.showLegend = elements.fmtShowLegend.checked;
         widget.format_config.legendPos = elements.fmtLegendPos.value;
         widget.format_config.palette = elements.fmtPaletteSelect.value;
+        widget.format_config.hideOutliers = elements.fmtHideOutliers ? elements.fmtHideOutliers.checked : false;
+        widget.format_config.logScale = elements.fmtLogScale ? elements.fmtLogScale.checked : false;
         widget.format_config.page = widget.format_config.page || state.currentPage;
 
         widget.title = widget.format_config.title;
@@ -1414,6 +1420,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chartObj.options.plugins?.legend) {
                 chartObj.options.plugins.legend.display = widget.format_config.showLegend;
                 chartObj.options.plugins.legend.position = widget.format_config.legendPos;
+            }
+            if (chartObj.options.scales?.y) {
+                chartObj.options.scales.y.type = widget.format_config.logScale ? 'logarithmic' : 'linear';
             }
             if (chartObj.options.scales?.x) {
                 chartObj.options.scales.x.grid.display = widget.format_config.gridX;

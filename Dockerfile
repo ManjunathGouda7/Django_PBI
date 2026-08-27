@@ -1,43 +1,33 @@
-# Use lightweight Python 3.12 slim base image
-FROM python:3.12-slim
+# Multi-stage Dockerfile for Apex BI Studio (Django + Analytics)
+FROM python:3.12-slim as builder
 
-# Prevent Python from writing .pyc files & enable unbuffered logging
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Final runtime image
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+COPY --from=builder /install /usr/local
+COPY . .
 
-# Copy project source code
-COPY . /app/
-
-# Create non-root app user
-RUN useradd -m -u 1000 appuser && \
-    mkdir -p /app/BI/media /app/BI/static && \
-    chown -R appuser:appuser /app
-
-USER appuser
-
-# Expose port 8000
 EXPOSE 8000
 
-# Set working directory to Django app directory
-WORKDIR /app/BI
-
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8000/login/ || exit 1
-
-# Command to run Gunicorn production WSGI server
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "BI.wsgi:application"]
-
+# Default command to run production server
+CMD ["python", "BI/manage.py", "runserver", "0.0.0.0:8000"]

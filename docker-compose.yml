@@ -1,117 +1,34 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Relational Metadata Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: powerbi_postgres
-    restart: always
-    environment:
-      POSTGRES_DB: powerbi_db
-      POSTGRES_USER: powerbi_user
-      POSTGRES_PASSWORD: powerbi_secure_password_2026
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U powerbi_user -d powerbi_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Django Web Application Container
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: powerbi_django_web
-    restart: always
+    build: .
+    command: python BI/manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
     ports:
       - "8000:8000"
     environment:
-      - DEBUG=False
-      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
-      - ALLOWED_HOSTS=*
-      - DATABASE_URL=postgres://powerbi_user:powerbi_secure_password_2026@postgres:5432/powerbi_db
+      - DEBUG=True
+      - DJANGO_ENV=development
       - REDIS_URL=redis://redis:6379/0
-      - MONGODB_URL=mongodb://mongo:27017
-    volumes:
-      - media_data:/app/BI/media
+      - SECRET_KEY=django-insecure-dev-key-change-in-production-powerbi-studio
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      mongo:
-        condition: service_started
-
-  # Celery Async Worker Container
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: powerbi_celery_worker
-    restart: always
-    command: celery -A BI worker --loglevel=info
-    environment:
-      - DEBUG=False
-      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
-      - DATABASE_URL=postgres://powerbi_user:powerbi_secure_password_2026@postgres:5432/powerbi_db
-      - REDIS_URL=redis://redis:6379/0
-      - MONGODB_URL=mongodb://mongo:27017
-    volumes:
-      - media_data:/app/BI/media
-    depends_on:
-      - postgres
       - redis
-      - mongo
 
-  # Celery Beat Scheduled Task Runner
-  celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: powerbi_celery_beat
-    restart: always
-    command: celery -A BI beat --loglevel=info
-    environment:
-      - DEBUG=False
-      - SECRET_KEY=django-production-secret-key-powerbi-studio-2026
-      - DATABASE_URL=postgres://powerbi_user:powerbi_secure_password_2026@postgres:5432/powerbi_db
-      - REDIS_URL=redis://redis:6379/0
-      - MONGODB_URL=mongodb://mongo:27017
-    depends_on:
-      - postgres
-      - redis
-      - mongo
-
-  # MongoDB Document Database Container
-  mongo:
-    image: mongo:latest
-    container_name: powerbi_mongodb
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  # Redis Cache & Task Broker Container
   redis:
-    image: redis:alpine
-    container_name: powerbi_redis
-    restart: always
+    image: redis:7-alpine
     ports:
       - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-volumes:
-  postgres_data:
-  mongo_data:
-  media_data:
-
-
+  celery_worker:
+    build: .
+    command: celery -A BI.celery worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - DJANGO_ENV=development
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=django-insecure-dev-key-change-in-production-powerbi-studio
+    depends_on:
+      - redis

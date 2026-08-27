@@ -9,7 +9,7 @@ if not hasattr(django.utils.cache, 'cc_delim_re'):
     django.utils.cache.cc_delim_re = re.compile(r'\s*,\s*')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load environment variables from .env file
 env_file = BASE_DIR / '.env'
@@ -18,15 +18,8 @@ if env_file.exists():
 else:
     load_dotenv()
 
-# Security & Debug Settings
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't')
-SECRET_KEY = os.getenv('SECRET_KEY')
-if not SECRET_KEY:
-    if DEBUG:
-        SECRET_KEY = 'django-insecure-dev-key-change-in-production-powerbi-studio'
-    else:
-        raise ValueError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable is required in production!")
-
+# Security & Secret Settings
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-change-in-production-powerbi-studio')
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]
 
 # Application definition
@@ -61,7 +54,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-
 ROOT_URLCONF = 'BI.urls'
 
 TEMPLATES = [
@@ -81,6 +73,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'BI.wsgi.application'
 
+# Database Default (SQLite)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -155,7 +148,6 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 50,
 }
 
-# Simple JWT Configuration
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
@@ -165,12 +157,10 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# File Upload Configuration
 MAX_UPLOAD_SIZE_MB = int(os.getenv('MAX_UPLOAD_SIZE_MB', 50))
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
-# Celery Configuration
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
@@ -179,39 +169,20 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = not bool(REDIS_URL and has_django_redis)
 
-# CORS Configuration
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-else:
-    CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:8000').split(',') if o.strip()]
-
-# Security Header & Session Enhancements
 X_FRAME_OPTIONS = 'DENY'
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# Session & Cookie Security
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_AGE = 28800  # 8 hours session duration
+SESSION_COOKIE_AGE = 28800
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_SAVE_EVERY_REQUEST = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
-if not DEBUG:
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1')
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-
-# Ensure log directory exists
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(exist_ok=True)
 
-# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -232,6 +203,18 @@ LOGGING = {
             'formatter': 'verbose',
             'level': 'ERROR',
         },
+        'file_etl': {
+            'class': 'logging.FileHandler',
+            'filename': LOG_DIR / 'etl_pipeline.log',
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
+        'file_outliers': {
+            'class': 'logging.FileHandler',
+            'filename': LOG_DIR / 'outlier_detection.log',
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
     },
     'root': {
         'handlers': ['console', 'file_errors'],
@@ -239,8 +222,13 @@ LOGGING = {
     },
     'loggers': {
         'analytics': {
-            'handlers': ['console', 'file_errors'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'handlers': ['console', 'file_errors', 'file_etl'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'outliers': {
+            'handlers': ['console', 'file_outliers'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
