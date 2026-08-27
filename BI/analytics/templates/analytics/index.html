@@ -5,7 +5,7 @@
 {% block content %}
 <div class="pbi-app-container">
 
-    <!-- Top Application Bar -->
+    <!-- Top Application Bar (Power BI Desktop Header) -->
     <header class="pbi-navbar">
         <div class="navbar-brand">
             <div class="pbi-logo">
@@ -17,7 +17,7 @@
             </div>
         </div>
 
-        <!-- Dashboard Selector & Actions -->
+        <!-- Dashboard & Dataset Selectors -->
         <div class="navbar-center">
             <div class="select-group">
                 <label><i class="fa-solid fa-dashboard"></i> Dashboard:</label>
@@ -29,35 +29,20 @@
                 </button>
             </div>
 
-            <div class="select-group" style="display:flex; align-items:center; gap:0.4rem;">
+            <div class="select-group">
                 <label><i class="fa-solid fa-database"></i> Dataset:</label>
                 <select id="dataset-select" class="pbi-select">
                     <option value="">Loading Datasets...</option>
                 </select>
-                {% if is_admin or user_role == 'admin' %}
-                <button class="btn btn-xs btn-outline-info" id="btn-append-data" title="Convert CSV & Append Data to Main GRL.25MPLA.json (Admin Only)" style="padding: 4px 8px; font-size:0.75rem; color:#38bdf8; border-color:rgba(56,189,248,0.4);">
-                    <i class="fa-solid fa-file-circle-plus"></i> Append CSV Data
-                </button>
-                <a href="{% url 'analytics:security_dashboard' %}" class="btn btn-xs btn-outline-success" title="Admin Security Dashboard & User Controls" style="padding: 4px 8px; font-size:0.75rem; color:#4ade80; border-color:rgba(74,222,128,0.4); text-decoration:none;">
-                    <i class="fa-solid fa-shield-halved"></i> Security Dashboard
-                </a>
-                {% endif %}
-                <button class="btn btn-xs btn-outline-warning" id="btn-update-dataset" title="Update / Replace File on Active Dataset" style="padding: 4px 8px; font-size:0.75rem;">
-                    <i class="fa-solid fa-file-pen"></i> Replace File
-                </button>
-                <button class="btn btn-xs btn-outline-danger" id="btn-delete-dataset" title="Delete Active Dataset & File" style="padding: 4px 8px; font-size:0.75rem; color:#ef4444; border-color:rgba(239,68,68,0.4);">
-                    <i class="fa-solid fa-trash-can"></i> Delete
-                </button>
             </div>
         </div>
 
         <div class="navbar-actions">
-            <button class="btn btn-warning" id="btn-get-data">
-                <i class="fa-solid fa-file-import"></i> Get Data
-            </button>
-            <button class="btn btn-secondary" id="btn-refresh-data" title="Refresh CSV and Dataset Caches">
-                <i class="fa-solid fa-arrows-rotate"></i> Refresh Data
-            </button>
+            {% if is_admin or user_role == 'admin' %}
+            <a href="{% url 'analytics:security_dashboard' %}" class="btn btn-xs btn-outline-success" title="Admin Security Dashboard & User Controls" style="padding: 4px 10px; font-size:0.75rem; color:#4ade80; border-color:rgba(74,222,128,0.4); text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-shield-halved"></i> Security
+            </a>
+            {% endif %}
             <div class="theme-picker">
                 <label><i class="fa-solid fa-palette"></i></label>
                 <select id="theme-select" class="pbi-select select-sm">
@@ -69,9 +54,6 @@
                     <option value="clean_light">Slate Light</option>
                 </select>
             </div>
-            <button class="btn btn-secondary" id="btn-export-pdf">
-                <i class="fa-solid fa-file-export"></i> Export PDF
-            </button>
             <div class="user-auth-badge"
                 style="display:flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.1);">
                 <i class="fa-solid fa-user-shield text-success"></i>
@@ -82,6 +64,12 @@
                     <i class="fa-solid fa-right-from-bracket"></i> Logout
                 </a>
             </div>
+
+            <!-- Hidden Stubs to keep legacy element listeners valid -->
+            <button id="btn-get-data" style="display:none;"></button>
+            <button id="btn-refresh-data" style="display:none;"></button>
+            <button id="btn-export-pdf" style="display:none;"></button>
+            <button id="btn-append-data" style="display:none;"></button>
         </div>
     </header>
 
@@ -92,23 +80,25 @@
         {% if user_role == 'admin' or request.user.is_staff or request.user.is_superuser %}
         <div class="ribbon-tab" id="ribbon-btn-append"><i class="fa-solid fa-file-circle-plus text-info"></i> Append Data</div>
         {% endif %}
-        <div class="ribbon-tab" id="ribbon-btn-autodb"><i class="fa-solid fa-wand-magic-sparkles text-warning"></i> AI Auto-Dashboard</div>
-        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh Data</div>
-        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers & Filters</div>
-        <div class="ribbon-tab" id="ribbon-btn-excel"><i class="fa-solid fa-file-excel text-success"></i> Export Excel</div>
-        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-primary"></i> Export CSV</div>
-        <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> Export PDF</div>
+        <div class="ribbon-tab" id="btn-update-dataset"><i class="fa-solid fa-file-pen text-warning"></i> Replace File</div>
+        <div class="ribbon-tab" id="btn-delete-dataset" style="color:#ef4444;"><i class="fa-solid fa-trash-can" style="color:#ef4444;"></i> Delete</div>
+        <div class="ribbon-tab" id="ribbon-btn-autodb"><i class="fa-solid fa-wand-magic-sparkles text-warning"></i> Auto-Dashboard</div>
+        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh</div>
+        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers</div>
+        <div class="ribbon-tab" id="ribbon-btn-excel"><i class="fa-solid fa-file-excel text-success"></i> Excel</div>
+        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-primary"></i> CSV</div>
+        <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> PDF</div>
         <div class="ribbon-tab" id="ribbon-btn-exec-pdf"><i class="fa-solid fa-file-invoice text-danger"></i> Executive PDF</div>
-        <div class="ribbon-tab" id="ribbon-btn-kiosk"><i class="fa-solid fa-tv text-accent"></i> Kiosk Mode</div>
+        <div class="ribbon-tab" id="ribbon-btn-kiosk"><i class="fa-solid fa-tv text-accent"></i> Kiosk</div>
 
         <div class="ribbon-qa-box"
-            style="display:flex; align-items:center; gap:0.4rem; margin-left:1rem; flex:1; max-width:280px;">
+            style="display:flex; align-items:center; gap:0.4rem; margin-left:auto; width:220px;">
             <div style="position:relative; width:100%;">
                 <i class="fa-solid fa-wand-magic-sparkles text-accent"
                     style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:0.75rem;"></i>
                 <input type="text" id="input-ai-qa" class="auth-input"
-                    placeholder="Ask Telemetry AI (e.g. 'Show iPhone1')"
-                    style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3);">
+                    placeholder="Ask AI Copilot..."
+                    style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3); width:100%;">
             </div>
         </div>
         <div class="ribbon-tab-layout"
@@ -122,13 +112,13 @@
         </div>
 
         <div class="ribbon-tab-auto-refresh"
-            style="display:flex; align-items:center; gap:0.4rem; margin-left:auto; font-size:0.78rem; color:var(--text-muted);">
-            <i class="fa-solid fa-clock text-warning"></i> Live Auto-Refresh:
+            style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
+            <i class="fa-solid fa-clock text-warning"></i> Auto-Refresh:
             <select id="auto-refresh-select" class="pbi-select select-sm" style="padding:2px 6px; font-size:0.75rem;">
-                <option value="0">Off (Manual)</option>
-                <option value="5">Every 5s</option>
-                <option value="10">Every 10s</option>
-                <option value="30">Every 30s</option>
+                <option value="0">Off</option>
+                <option value="5">5s</option>
+                <option value="10">10s</option>
+                <option value="30">30s</option>
             </select>
         </div>
     </div>
@@ -179,38 +169,6 @@
                         <i class="fa-solid fa-filter-circle-xmark" style="font-size:0.8rem;"></i>
                         <span>Clear Filters</span>
                     </button>
-                </div>
-
-                <!-- Live Telemetry KPI Summary Bar -->
-                <div class="telemetry-summary-bar" id="telemetry-summary-bar">
-                    <div class="telemetry-stat-card">
-                        <div class="stat-info">
-                            <span class="stat-label">Total Records</span>
-                            <span class="stat-value" id="stat-total-rows">37,842</span>
-                        </div>
-                        <span class="stat-badge success"><i class="fa-solid fa-circle-check"></i> Online</span>
-                    </div>
-                    <div class="telemetry-stat-card">
-                        <div class="stat-info">
-                            <span class="stat-label">Mean PFO Metric</span>
-                            <span class="stat-value" id="stat-mean-pfo">31.4 mW</span>
-                        </div>
-                        <span class="stat-badge info"><i class="fa-solid fa-chart-line"></i> Nominal</span>
-                    </div>
-                    <div class="telemetry-stat-card">
-                        <div class="stat-info">
-                            <span class="stat-label">DUT / Board Count</span>
-                            <span class="stat-value" id="stat-board-count">9 Boards</span>
-                        </div>
-                        <span class="stat-badge warning"><i class="fa-solid fa-microchip"></i> Active</span>
-                    </div>
-                    <div class="telemetry-stat-card">
-                        <div class="stat-info">
-                            <span class="stat-label">Avg Rectified Power</span>
-                            <span class="stat-value" id="stat-avg-power">4.82 W</span>
-                        </div>
-                        <span class="stat-badge success"><i class="fa-solid fa-bolt"></i> Optimal</span>
-                    </div>
                 </div>
 
                 <!-- Interactive Visual Canvas -->

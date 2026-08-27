@@ -166,12 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btnResetVizForm: document.getElementById('btn-reset-viz-form'),
         vizModeStatus: document.getElementById('viz-mode-status'),
 
-        // Layout & Telemetry KPI Summary
-        canvasLayoutSelect: document.getElementById('canvas-layout-select'),
-        statTotalRows: document.getElementById('stat-total-rows'),
-        statMeanPfo: document.getElementById('stat-mean-pfo'),
-        statBoardCount: document.getElementById('stat-board-count'),
-        statAvgPower: document.getElementById('stat-avg-power')
+        // Layout
+        canvasLayoutSelect: document.getElementById('canvas-layout-select')
     };
 
     // Initialize App
@@ -695,7 +691,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (elements.viewModel && elements.viewModel.style.display !== 'none') {
                 loadModelViewSchema();
             }
-            updateTelemetrySummaryBar();
 
             // Sync active dashboard's dataset if user initiated dataset change
             if (syncDashboard && state.activeDashboardId) {
@@ -749,7 +744,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderCanvasWidgets(data.widgets || []);
             renderSlicerPills();
-            updateTelemetrySummaryBar();
 
         } catch (err) {
             console.error("Failed to load dashboard", err);
@@ -772,71 +766,6 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(state.chartInstances).forEach(chart => {
             if (chart && chart.resize) chart.resize();
         });
-    }
-
-    function updateTelemetrySummaryBar() {
-        if (!state.activeDataset) return;
-        const ds = state.activeDataset;
-
-        if (elements.statTotalRows) {
-            const count = ds.row_count || 37842;
-            elements.statTotalRows.textContent = count.toLocaleString();
-        }
-
-        // Compute distinct boards & metrics across active widget chart datasets
-        let distinctBoards = new Set();
-        let totalPfo = 0;
-        let pfoCount = 0;
-        let totalPower = 0;
-        let powerCount = 0;
-
-        if (state.activeDashboard && state.activeDashboard.widgets) {
-            state.activeDashboard.widgets.forEach(w => {
-                const cd = w.chart_data;
-                if (cd && cd.datasets) {
-                    cd.datasets.forEach(dsItem => {
-                        if (dsItem.label && !dsItem.label.includes(' vs ')) {
-                            distinctBoards.add(dsItem.label);
-                        }
-                        if (dsItem.data && Array.isArray(dsItem.data)) {
-                            dsItem.data.forEach(pt => {
-                                if (pt.y !== undefined && !isNaN(pt.y)) {
-                                    totalPfo += Number(pt.y);
-                                    pfoCount++;
-                                }
-                                if (pt.x !== undefined && !isNaN(pt.x)) {
-                                    totalPower += Number(pt.x);
-                                    powerCount++;
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-        }
-
-        if (elements.statBoardCount) {
-            const bCount = distinctBoards.size > 0 ? distinctBoards.size : 9;
-            elements.statBoardCount.textContent = `${bCount} DUTs`;
-        }
-
-        if (elements.statMeanPfo) {
-            if (pfoCount > 0) {
-                const meanPfo = (totalPfo / pfoCount).toFixed(1);
-                elements.statMeanPfo.textContent = `${meanPfo} mW`;
-            } else {
-                elements.statMeanPfo.textContent = `31.4 mW`;
-            }
-        }
-
-        if (elements.statAvgPower) {
-            if (powerCount > 0) {
-                const avgPower = (totalPower / powerCount).toFixed(2);
-                elements.statAvgPower.textContent = `${avgPower} W`;
-            } else {
-                elements.statAvgPower.textContent = `4.82 W`;
-            }
-        }
     }
 
     function applyTheme(themeName) {
