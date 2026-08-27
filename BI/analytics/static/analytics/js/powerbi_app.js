@@ -16,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userThemeSelected: null,
         activeSlicers: {}, // e.g. { "Region": ["North America"] }
         chartInstances: {}, // Store Chart.js objects by widget id
+        pages: ['Page 1'],
+        currentPage: 'Page 1',
+        spotlightWidgetId: null,
+        focusWidget: null,
+        focusChartInstance: null,
         dataView: {
             page: 1,
             pageSize: 50,
@@ -71,6 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
         slicerPillsContainer: document.getElementById('slicer-pills-container'),
         btnClearSlicers: document.getElementById('btn-clear-slicers'),
 
+        // Bottom Multi-Page Tab Bar
+        pageTabsContainer: document.getElementById('page-tabs-container'),
+        btnAddPage: document.getElementById('btn-add-page'),
+        statusPageInfo: document.getElementById('status-page-info'),
+        statusZoomDisplay: document.getElementById('status-zoom-display'),
+        statusDatasetName: document.getElementById('status-dataset-name'),
+
         // Visual Customizer Right Pane
         vizTypePicker: document.getElementById('viz-type-picker'),
         vizTitleInput: document.getElementById('viz-title-input'),
@@ -80,6 +92,35 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSaveWidget: document.getElementById('btn-save-widget'),
         lblSaveWidget: document.getElementById('lbl-save-widget'),
         btnDeleteWidget: document.getElementById('btn-delete-widget'),
+
+        // Sub-tabs: Build Visual / Format Visual
+        subtabBtnBuild: document.getElementById('subtab-btn-build'),
+        subtabBtnFormat: document.getElementById('subtab-btn-format'),
+        subtabContentBuild: document.getElementById('subtab-content-build'),
+        subtabContentFormat: document.getElementById('subtab-content-format'),
+
+        // Format Visual Form Controls
+        fmtTitleInput: document.getElementById('fmt-title-input'),
+        fmtTitleSize: document.getElementById('fmt-title-size'),
+        fmtAlignLeft: document.getElementById('fmt-align-left'),
+        fmtAlignCenter: document.getElementById('fmt-align-center'),
+        fmtAlignRight: document.getElementById('fmt-align-right'),
+        fmtGridX: document.getElementById('fmt-grid-x'),
+        fmtGridY: document.getElementById('fmt-grid-y'),
+        fmtXTitle: document.getElementById('fmt-x-title'),
+        fmtYTitle: document.getElementById('fmt-y-title'),
+        fmtShowLegend: document.getElementById('fmt-show-legend'),
+        fmtLegendPos: document.getElementById('fmt-legend-pos'),
+        fmtPaletteSelect: document.getElementById('fmt-palette-select'),
+        btnApplyFormat: document.getElementById('btn-apply-format'),
+
+        // Fullscreen Focus Mode Modal
+        modalFocusMode: document.getElementById('modal-focus-mode'),
+        btnFocusBack: document.getElementById('btn-focus-back'),
+        focusModalTitle: document.getElementById('focus-modal-title'),
+        focusCanvas: document.getElementById('focus-canvas'),
+        btnFocusResetZoom: document.getElementById('btn-focus-reset-zoom'),
+        btnFocusExport: document.getElementById('btn-focus-export'),
 
         // Data View Tab
         dvDatasetTitle: document.getElementById('dv-dataset-title'),
@@ -131,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function init() {
         bindEvents();
+        renderPageTabs();
         await fetchDatasets();
         await fetchDashboards();
         initDataChatController();
@@ -142,6 +184,61 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.navData.addEventListener('click', () => switchView('data'));
         if (elements.navModel) elements.navModel.addEventListener('click', () => switchView('model'));
 
+        // Subtabs: Build Visual / Format Visual
+        if (elements.subtabBtnBuild && elements.subtabBtnFormat) {
+            elements.subtabBtnBuild.addEventListener('click', () => switchVizSubtab('build'));
+            elements.subtabBtnFormat.addEventListener('click', () => switchVizSubtab('format'));
+        }
+
+        // Format Visual alignment buttons
+        if (elements.fmtAlignLeft) {
+            [elements.fmtAlignLeft, elements.fmtAlignCenter, elements.fmtAlignRight].forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    [elements.fmtAlignLeft, elements.fmtAlignCenter, elements.fmtAlignRight].forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                });
+            });
+        }
+
+        // Apply Formatting Button
+        if (elements.btnApplyFormat) {
+            elements.btnApplyFormat.addEventListener('click', handleApplyFormat);
+        }
+
+        // Multi-Page Report Tab Controls
+        if (elements.btnAddPage) {
+            elements.btnAddPage.addEventListener('click', handleAddNewPage);
+        }
+        if (elements.statusZoomDisplay) {
+            elements.statusZoomDisplay.addEventListener('click', () => {
+                if (elements.canvasGrid) {
+                    elements.canvasGrid.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        }
+
+        // Focus Mode Modal Controls
+        if (elements.btnFocusBack) {
+            elements.btnFocusBack.addEventListener('click', closeFocusMode);
+        }
+        if (elements.btnFocusResetZoom) {
+            elements.btnFocusResetZoom.addEventListener('click', () => {
+                if (state.focusChartInstance && state.focusChartInstance.resetZoom) {
+                    state.focusChartInstance.resetZoom();
+                }
+            });
+        }
+        if (elements.btnFocusExport) {
+            elements.btnFocusExport.addEventListener('click', handleExportFocusChart);
+        }
+
+        // Close context menus when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.pbi-visual-header')) {
+                document.querySelectorAll('.vh-dropdown-menu.open').forEach(menu => menu.classList.remove('open'));
+                document.querySelectorAll('.visual-card.menu-open').forEach(card => card.classList.remove('menu-open'));
+            }
+        });
 
         if (elements.btnResetVizForm) {
             elements.btnResetVizForm.addEventListener('click', resetWidgetForm);
@@ -1006,6 +1103,320 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Color Palettes
+    const COLOR_PALETTES = {
+        pbi_classic: ['#f2c811', '#0078d4', '#d83b01', '#107c41', '#5c2d91', '#008272', '#b146c2', '#004e8c'],
+        fluent_modern: ['#0078d4', '#00bcf2', '#00188f', '#68217a', '#008272', '#004b50', '#107c41', '#d83b01'],
+        sunset_coral: ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#f72585', '#7209b7', '#4361ee'],
+        emerald_teal: ['#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899'],
+        cyber_neon: ['#a855f7', '#ec4899', '#06b6d4', '#f59e0b', '#10b981', '#38bdf8', '#fbbf24', '#f43f5e']
+    };
+
+    // Subtab Switcher: Build Visual vs Format Visual
+    function switchVizSubtab(tabName) {
+        if (tabName === 'build') {
+            elements.subtabBtnBuild.classList.add('active');
+            elements.subtabBtnFormat.classList.remove('active');
+            elements.subtabContentBuild.style.display = 'flex';
+            elements.subtabContentFormat.style.display = 'none';
+        } else {
+            elements.subtabBtnFormat.classList.add('active');
+            elements.subtabBtnBuild.classList.remove('active');
+            elements.subtabContentFormat.style.display = 'flex';
+            elements.subtabContentBuild.style.display = 'none';
+
+            const activeWidget = state.activeDashboard ? (state.activeDashboard.widgets || []).find(w => w.id === state.selectedWidgetId) : null;
+            if (activeWidget) {
+                populateFormatVisualForm(activeWidget);
+            }
+        }
+    }
+
+    // Multi-Page Tab Management
+    function renderPageTabs() {
+        if (!elements.pageTabsContainer) return;
+        let html = '';
+        state.pages.forEach((pageName, idx) => {
+            const isActive = pageName === state.currentPage;
+            html += `
+                <button class="page-tab ${isActive ? 'active' : ''}" data-page="${pageName}" title="Double-click to rename">
+                    <i class="fa-regular fa-file-lines"></i>
+                    <span class="page-tab-name">${pageName}</span>
+                    ${state.pages.length > 1 ? `<span class="page-tab-close" data-page="${pageName}" title="Delete page">&times;</span>` : ''}
+                </button>`;
+        });
+        elements.pageTabsContainer.innerHTML = html;
+
+        // Tab click / double-click / delete bindings
+        elements.pageTabsContainer.querySelectorAll('.page-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                if (e.target.closest('.page-tab-close')) return;
+                switchPage(tab.dataset.page);
+            });
+
+            tab.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.page-tab-close')) return;
+                renamePagePrompt(tab.dataset.page);
+            });
+        });
+
+        elements.pageTabsContainer.querySelectorAll('.page-tab-close').forEach(closeBtn => {
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePage(closeBtn.dataset.page);
+            });
+        });
+
+        updateStatusBar();
+    }
+
+    function switchPage(pageName) {
+        state.currentPage = pageName;
+        renderPageTabs();
+        if (state.activeDashboard && state.activeDashboard.widgets) {
+            renderCanvasWidgets(state.activeDashboard.widgets);
+        }
+    }
+
+    function handleAddNewPage() {
+        const nextNum = state.pages.length + 1;
+        const newPageName = `Page ${nextNum}`;
+        state.pages.push(newPageName);
+        switchPage(newPageName);
+    }
+
+    function renamePagePrompt(oldName) {
+        const newName = prompt(`Rename report page "${oldName}" to:`, oldName);
+        if (newName && newName.trim() && newName.trim() !== oldName) {
+            const trimmed = newName.trim();
+            const idx = state.pages.indexOf(oldName);
+            if (idx > -1) {
+                state.pages[idx] = trimmed;
+                if (state.currentPage === oldName) state.currentPage = trimmed;
+                // Update widgets assigned to this page
+                if (state.activeDashboard && state.activeDashboard.widgets) {
+                    state.activeDashboard.widgets.forEach(w => {
+                        if (w.format_config && w.format_config.page === oldName) {
+                            w.format_config.page = trimmed;
+                        }
+                    });
+                }
+                renderPageTabs();
+            }
+        }
+    }
+
+    function deletePage(pageName) {
+        if (state.pages.length <= 1) return;
+        if (!confirm(`Are you sure you want to delete "${pageName}" and hide its visual elements?`)) return;
+        const idx = state.pages.indexOf(pageName);
+        if (idx > -1) {
+            state.pages.splice(idx, 1);
+            if (state.currentPage === pageName) {
+                state.currentPage = state.pages[0];
+            }
+            renderPageTabs();
+            if (state.activeDashboard && state.activeDashboard.widgets) {
+                renderCanvasWidgets(state.activeDashboard.widgets);
+            }
+        }
+    }
+
+    function updateStatusBar() {
+        if (elements.statusPageInfo) {
+            const currIdx = state.pages.indexOf(state.currentPage);
+            elements.statusPageInfo.innerHTML = `<i class="fa-solid fa-layer-group"></i> <span>Page ${currIdx + 1} of ${state.pages.length}</span>`;
+        }
+        if (elements.statusDatasetName) {
+            elements.statusDatasetName.textContent = state.activeDataset ? state.activeDataset.name : 'Telemetry Active';
+        }
+    }
+
+    // Spotlight Toggle
+    function toggleSpotlight(widgetId, cardEl) {
+        if (state.spotlightWidgetId === widgetId) {
+            state.spotlightWidgetId = null;
+            elements.canvasGrid.classList.remove('canvas-spotlight-active');
+            cardEl.classList.remove('spotlight-active-card');
+            const spotlightBtn = cardEl.querySelector('.vh-spotlight');
+            if (spotlightBtn) spotlightBtn.classList.remove('active');
+        } else {
+            state.spotlightWidgetId = widgetId;
+            elements.canvasGrid.classList.add('canvas-spotlight-active');
+            elements.canvasGrid.querySelectorAll('.visual-card').forEach(c => c.classList.remove('spotlight-active-card'));
+            elements.canvasGrid.querySelectorAll('.vh-spotlight').forEach(b => b.classList.remove('active'));
+            cardEl.classList.add('spotlight-active-card');
+            const spotlightBtn = cardEl.querySelector('.vh-spotlight');
+            if (spotlightBtn) spotlightBtn.classList.add('active');
+        }
+    }
+
+    // Focus Mode Fullscreen Modal
+    function openFocusMode(widget) {
+        state.focusWidget = widget;
+        elements.focusModalTitle.textContent = (widget.format_config && widget.format_config.title) ? widget.format_config.title : widget.title;
+        elements.modalFocusMode.classList.add('active');
+
+        if (state.focusChartInstance) {
+            state.focusChartInstance.destroy();
+            state.focusChartInstance = null;
+        }
+
+        setTimeout(() => {
+            renderFocusChart(widget);
+        }, 80);
+    }
+
+    function closeFocusMode() {
+        elements.modalFocusMode.classList.remove('active');
+        if (state.focusChartInstance) {
+            state.focusChartInstance.destroy();
+            state.focusChartInstance = null;
+        }
+        state.focusWidget = null;
+    }
+
+    function renderFocusChart(widget) {
+        const canvasEl = elements.focusCanvas;
+        if (!canvasEl) return;
+        const chartData = widget.chart_data || {};
+        const paletteKey = widget.format_config?.palette || 'pbi_classic';
+        const palette = COLOR_PALETTES[paletteKey] || COLOR_PALETTES.pbi_classic;
+
+        if (widget.visual_type === 'scatter') {
+            const datasets = (chartData.datasets || []).map((ds, idx) => ({
+                label: ds.label,
+                data: ds.data,
+                backgroundColor: ds.color || palette[idx % palette.length],
+                borderColor: 'transparent',
+                pointRadius: 4,
+                pointHoverRadius: 8
+            }));
+
+            state.focusChartInstance = new Chart(canvasEl, {
+                type: 'scatter',
+                data: { datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { display: widget.format_config?.showLegend !== false, position: widget.format_config?.legendPos || 'top' },
+                        zoom: {
+                            zoom: { wheel: { enabled: true }, drag: { enabled: true, backgroundColor: 'rgba(242, 200, 17, 0.25)', borderColor: '#f2c811', borderWidth: 1 }, mode: 'xy' },
+                            pan: { enabled: true, mode: 'xy' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: widget.format_config?.xTitle || widget.x_axis || 'X-Axis', color: '#94a3b8' },
+                            grid: { display: widget.format_config?.gridX !== false, color: 'rgba(255, 255, 255, 0.08)' }
+                        },
+                        y: {
+                            title: { display: true, text: widget.format_config?.yTitle || widget.y_axis || 'Y-Axis', color: '#94a3b8' },
+                            grid: { display: widget.format_config?.gridY !== false, color: 'rgba(255, 255, 255, 0.08)' }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function handleExportFocusChart() {
+        if (!elements.focusCanvas) return;
+        const link = document.createElement('a');
+        const title = (state.focusWidget?.title || 'Visual_Focus').replace(/\s+/g, '_');
+        link.download = `PowerBI_${title}_Focus.png`;
+        link.href = elements.focusCanvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // Populate Format Visual Form from Widget
+    function populateFormatVisualForm(widget) {
+        if (!widget) return;
+        const fmt = widget.format_config || {};
+        if (elements.fmtTitleInput) elements.fmtTitleInput.value = fmt.title || widget.title || '';
+        if (elements.fmtTitleSize) elements.fmtTitleSize.value = fmt.titleSize || '14';
+        if (elements.fmtGridX) elements.fmtGridX.checked = fmt.gridX !== false;
+        if (elements.fmtGridY) elements.fmtGridY.checked = fmt.gridY !== false;
+        if (elements.fmtXTitle) elements.fmtXTitle.value = fmt.xTitle || widget.x_axis || '';
+        if (elements.fmtYTitle) elements.fmtYTitle.value = fmt.yTitle || widget.y_axis || '';
+        if (elements.fmtShowLegend) elements.fmtShowLegend.checked = fmt.showLegend !== false;
+        if (elements.fmtLegendPos) elements.fmtLegendPos.value = fmt.legendPos || 'top';
+        if (elements.fmtPaletteSelect) elements.fmtPaletteSelect.value = fmt.palette || 'pbi_classic';
+    }
+
+    // Apply Formatting Changes
+    async function handleApplyFormat() {
+        if (!state.selectedWidgetId) {
+            alert("Please select a visual card to format first.");
+            return;
+        }
+
+        const widget = state.activeDashboard ? (state.activeDashboard.widgets || []).find(w => w.id === state.selectedWidgetId) : null;
+        if (!widget) return;
+
+        widget.format_config = widget.format_config || {};
+        widget.format_config.title = elements.fmtTitleInput.value.trim() || widget.title;
+        widget.format_config.titleSize = parseInt(elements.fmtTitleSize.value) || 14;
+        widget.format_config.gridX = elements.fmtGridX.checked;
+        widget.format_config.gridY = elements.fmtGridY.checked;
+        widget.format_config.xTitle = elements.fmtXTitle.value.trim();
+        widget.format_config.yTitle = elements.fmtYTitle.value.trim();
+        widget.format_config.showLegend = elements.fmtShowLegend.checked;
+        widget.format_config.legendPos = elements.fmtLegendPos.value;
+        widget.format_config.palette = elements.fmtPaletteSelect.value;
+        widget.format_config.page = widget.format_config.page || state.currentPage;
+
+        widget.title = widget.format_config.title;
+
+        // Update active chart instance in place
+        const chartObj = state.chartInstances[widget.id];
+        if (chartObj) {
+            const palette = COLOR_PALETTES[widget.format_config.palette] || COLOR_PALETTES.pbi_classic;
+            if (chartObj.data.datasets) {
+                chartObj.data.datasets.forEach((ds, idx) => {
+                    ds.backgroundColor = palette[idx % palette.length];
+                });
+            }
+            if (chartObj.options.plugins?.legend) {
+                chartObj.options.plugins.legend.display = widget.format_config.showLegend;
+                chartObj.options.plugins.legend.position = widget.format_config.legendPos;
+            }
+            if (chartObj.options.scales?.x) {
+                chartObj.options.scales.x.grid.display = widget.format_config.gridX;
+                if (widget.format_config.xTitle) chartObj.options.scales.x.title.text = widget.format_config.xTitle;
+            }
+            if (chartObj.options.scales?.y) {
+                chartObj.options.scales.y.grid.display = widget.format_config.gridY;
+                if (widget.format_config.yTitle) chartObj.options.scales.y.title.text = widget.format_config.yTitle;
+            }
+            chartObj.update();
+        }
+
+        // Update card title text in DOM
+        const cardEl = elements.canvasGrid.querySelector(`.visual-card[data-widget-id="${widget.id}"]`);
+        if (cardEl) {
+            const titleEl = cardEl.querySelector('.visual-card-title');
+            if (titleEl) titleEl.textContent = widget.format_config.title;
+        }
+
+        // Persist to backend
+        try {
+            await fetch(`/api/widgets/${widget.id}/`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: widget.title,
+                    format_config: widget.format_config,
+                    show_legend: widget.format_config.showLegend
+                })
+            });
+        } catch (err) {
+            console.error("Failed persisting format_config:", err);
+        }
+    }
+
     // Render Visual Widgets on Canvas
     function renderCanvasWidgets(widgets) {
         // Destroy existing Chart.js instances
@@ -1014,39 +1425,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
         elements.canvasGrid.innerHTML = '';
 
-        if (widgets.length === 0) {
+        // Filter widgets by current page if multiple pages exist
+        const pageWidgets = widgets.filter(w => {
+            if (state.pages.length === 1) return true;
+            return (!w.format_config || !w.format_config.page || w.format_config.page === state.currentPage);
+        });
+
+        if (pageWidgets.length === 0) {
             elements.canvasGrid.innerHTML = `
                 <div style="grid-column: span 12; text-align: center; padding: 4rem; color: var(--text-dim);">
-                    <i class="fa-solid fa-chart-line" style="font-size: 3rem; margin-bottom: 1rem;"></i>
-                    <h3>Canvas is Empty</h3>
-                    <p>Select fields on the right pane and click <strong>Add Visual to Canvas</strong>.</p>
+                    <i class="fa-solid fa-chart-line" style="font-size: 3rem; margin-bottom: 1rem; color: var(--pbi-yellow);"></i>
+                    <h3>Page Canvas is Empty</h3>
+                    <p>Select fields on the right pane and click <strong>Add Visual to Canvas</strong> to build visuals on "${state.currentPage}".</p>
                 </div>`;
             return;
         }
 
-        widgets.forEach(w => {
+        pageWidgets.forEach(w => {
             const card = document.createElement('div');
-            card.className = `visual-card ${state.selectedWidgetId === w.id ? 'selected' : ''}`;
+            card.className = `visual-card ${state.selectedWidgetId === w.id ? 'selected' : ''} ${state.spotlightWidgetId === w.id ? 'spotlight-active-card' : ''}`;
             const vType = String(w.visual_type || '').toLowerCase();
-            const isFullWidth = (widgets.length === 1 || ['scatter', 'table', 'line', 'area'].includes(vType));
+            const isFullWidth = (pageWidgets.length === 1 || ['scatter', 'table', 'line', 'area'].includes(vType));
             const colSpan = isFullWidth ? 12 : (w.width || 6);
             const rowSpan = (vType === 'scatter') ? 7 : (w.height || 5);
             card.style.gridColumn = `span ${colSpan}`;
             card.style.gridRow = `span ${rowSpan}`;
             if (isFullWidth) {
-                card.style.minHeight = '560px';
+                card.style.minHeight = '540px';
             }
             card.dataset.widgetId = w.id;
 
-
+            const displayTitle = (w.format_config && w.format_config.title) ? w.format_config.title : w.title;
 
             card.innerHTML = `
-                <div class="visual-card-header">
-                    <span class="visual-card-title">${w.title}</span>
-                    <div class="visual-card-actions">
-                        <button class="card-action-btn btn-edit" title="Edit Visual"><i class="fa-solid fa-pen"></i></button>
-                        <button class="card-action-btn btn-del" title="Delete Visual"><i class="fa-solid fa-times"></i></button>
+                <!-- Power BI Visual Header Action Bar (Hover Top-Right) -->
+                <div class="pbi-visual-header">
+                    <button class="vh-btn vh-spotlight ${state.spotlightWidgetId === w.id ? 'active' : ''}" title="Spotlight Visual"><i class="fa-solid fa-lightbulb"></i></button>
+                    <button class="vh-btn vh-focus" title="Focus Mode (Expand)"><i class="fa-solid fa-expand"></i></button>
+                    <button class="vh-btn vh-filter" title="Filter Details"><i class="fa-solid fa-filter"></i></button>
+                    <button class="vh-btn vh-more" title="More Options (···)"><i class="fa-solid fa-ellipsis"></i></button>
+                    <div class="vh-dropdown-menu">
+                        <button class="vh-menu-item item-export"><i class="fa-solid fa-file-csv"></i> Export Data (CSV)</button>
+                        <button class="vh-menu-item item-table"><i class="fa-solid fa-table"></i> Show as Table</button>
+                        <button class="vh-menu-item item-zoom"><i class="fa-solid fa-arrows-rotate"></i> Reset Zoom</button>
+                        <button class="vh-menu-item item-edit"><i class="fa-solid fa-pen-to-square"></i> Edit Visual Fields</button>
+                        <button class="vh-menu-item item-format"><i class="fa-solid fa-paintbrush"></i> Format Visual</button>
+                        <div class="vh-menu-divider"></div>
+                        <button class="vh-menu-item item-del" style="color:#ef4444;"><i class="fa-solid fa-trash" style="color:#ef4444;"></i> Delete Visual</button>
                     </div>
+                </div>
+
+                <div class="visual-card-header">
+                    <span class="visual-card-title">${displayTitle}</span>
                 </div>
                 <div class="visual-card-body">
                     <canvas id="canvas-widget-${w.id}"></canvas>
@@ -1054,15 +1484,87 @@ document.addEventListener('DOMContentLoaded', () => {
 
             elements.canvasGrid.appendChild(card);
 
-            // Bind card actions
+            // Bind Card Select
             card.addEventListener('click', (e) => {
-                if (!e.target.closest('.card-action-btn')) {
+                if (!e.target.closest('.pbi-visual-header')) {
                     selectWidgetForEditing(w);
                 }
             });
 
-            card.querySelector('.btn-edit').addEventListener('click', () => selectWidgetForEditing(w));
-            card.querySelector('.btn-del').addEventListener('click', () => deleteWidget(w.id));
+            // Bind Visual Header Actions
+            const vhSpotlight = card.querySelector('.vh-spotlight');
+            if (vhSpotlight) vhSpotlight.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleSpotlight(w.id, card);
+            });
+
+            const vhFocus = card.querySelector('.vh-focus');
+            if (vhFocus) vhFocus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openFocusMode(w);
+            });
+
+            const vhFilter = card.querySelector('.vh-filter');
+            if (vhFilter) vhFilter.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const slicerCount = Object.keys(state.activeSlicers).length;
+                alert(`Applied Slicers on "${w.title}":\n${slicerCount > 0 ? JSON.stringify(state.activeSlicers, null, 2) : 'No active filters (All data displayed)'}`);
+            });
+
+            const vhMore = card.querySelector('.vh-more');
+            const vhMenu = card.querySelector('.vh-dropdown-menu');
+            if (vhMore && vhMenu) {
+                vhMore.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const wasOpen = vhMenu.classList.contains('open');
+                    document.querySelectorAll('.vh-dropdown-menu.open').forEach(m => m.classList.remove('open'));
+                    document.querySelectorAll('.visual-card.menu-open').forEach(c => c.classList.remove('menu-open'));
+                    if (!wasOpen) {
+                        vhMenu.classList.add('open');
+                        card.classList.add('menu-open');
+                    }
+                });
+            }
+
+            // Menu Items
+            const itemExport = card.querySelector('.item-export');
+            if (itemExport) itemExport.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activeDatasetId) window.location.href = `/export-csv/${state.activeDatasetId}/`;
+            });
+
+            const itemTable = card.querySelector('.item-table');
+            if (itemTable) itemTable.addEventListener('click', (e) => {
+                e.stopPropagation();
+                w.visual_type = w.visual_type === 'table' ? 'scatter' : 'table';
+                renderCanvasWidgets(state.activeDashboard.widgets);
+            });
+
+            const itemZoom = card.querySelector('.item-zoom');
+            if (itemZoom) itemZoom.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.chartInstances[w.id]?.resetZoom) state.chartInstances[w.id].resetZoom();
+            });
+
+            const itemEdit = card.querySelector('.item-edit');
+            if (itemEdit) itemEdit.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectWidgetForEditing(w);
+                switchVizSubtab('build');
+            });
+
+            const itemFormat = card.querySelector('.item-format');
+            if (itemFormat) itemFormat.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectWidgetForEditing(w);
+                switchVizSubtab('format');
+            });
+
+            const itemDel = card.querySelector('.item-del');
+            if (itemDel) itemDel.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteWidget(w.id);
+            });
 
             // Render Chart inside canvas
             setTimeout(() => {
@@ -1075,12 +1577,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasEl = document.getElementById(canvasId);
         if (!canvasEl) return;
         const chartData = widget.chart_data;
+        const fmt = widget.format_config || {};
+        const paletteKey = fmt.palette || 'pbi_classic';
+        const palette = COLOR_PALETTES[paletteKey] || COLOR_PALETTES.pbi_classic;
 
         if (widget.visual_type === 'kpi') {
             const bodyEl = canvasEl.parentElement;
             bodyEl.innerHTML = `
                 <div class="kpi-container">
-                    <div class="kpi-big-number">${chartData.kpi_value !== undefined ? chartData.kpi_value.toLocaleString() : '0'}</div>
+                    <div class="kpi-big-number" style="color:var(--pbi-yellow);">${chartData.kpi_value !== undefined ? chartData.kpi_value.toLocaleString() : '0'}</div>
                     <div class="kpi-metric-name">${chartData.kpi_label || 'Metric'}</div>
                 </div>`;
             return;
@@ -1102,16 +1607,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (widget.visual_type === 'scatter') {
-            const palette = ['#00A4EF', '#1E3A8A', '#F97316', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
             const datasets = (chartData.datasets || []).map((ds, idx) => ({
                 label: ds.label,
                 data: ds.data,
                 backgroundColor: ds.color || palette[idx % palette.length],
                 borderColor: 'transparent',
                 borderWidth: 0,
-                pointRadius: 2.8,
-                pointHoverRadius: 6,
-                pointHitRadius: 7
+                pointRadius: 3,
+                pointHoverRadius: 6.5,
+                pointHitRadius: 7.5
             }));
 
             const chartObj = new Chart(canvasEl, {
@@ -1124,8 +1628,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     normalized: true,
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'top',
+                            display: fmt.showLegend !== false,
+                            position: fmt.legendPos || 'top',
                             align: 'start',
                             labels: {
                                 color: '#94a3b8',
@@ -1137,16 +1641,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         zoom: {
                             zoom: {
                                 wheel: { enabled: true },
-                                drag: { enabled: true, backgroundColor: 'rgba(0, 164, 239, 0.25)', borderColor: '#00A4EF', borderWidth: 1 },
+                                drag: { enabled: true, backgroundColor: 'rgba(242, 200, 17, 0.25)', borderColor: '#f2c811', borderWidth: 1 },
                                 mode: 'xy'
                             },
                             pan: { enabled: true, mode: 'xy' }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.96)',
-                            titleColor: '#38bdf8',
+                            titleColor: '#f2c811',
                             bodyColor: '#f8fafc',
-                            borderColor: 'rgba(56, 189, 248, 0.4)',
+                            borderColor: 'rgba(242, 200, 17, 0.4)',
                             borderWidth: 1,
                             padding: 12,
                             cornerRadius: 8,
@@ -1170,34 +1674,26 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const lines = [];
                                     const boardName = raw.board && raw.board !== 'N/A' ? raw.board : '';
 
-                                    // 1. Group / Series if different from Board and not a generic vs label
                                     const groupColName = chartData.group_col || widget.group_by;
                                     const dsLabel = context.dataset ? context.dataset.label : '';
                                     if (groupColName && dsLabel && dsLabel !== boardName && !dsLabel.includes(' vs ')) {
                                         lines.push(`${groupColName}: ${dsLabel}`);
                                     }
 
-                                    // 2. X-Axis metric
-                                    const xAxisName = chartData.x_col || widget.x_axis || 'X-Axis';
+                                    const xAxisName = fmt.xTitle || chartData.x_col || widget.x_axis || 'X-Axis';
                                     const xVal = context.parsed.x !== undefined ? context.parsed.x : (raw && raw.x);
                                     lines.push(`${xAxisName}: ${xVal}`);
 
-                                    // 3. Y-Axis metric
-                                    const yAxisName = chartData.y_col || widget.y_axis || 'Y-Axis';
+                                    const yAxisName = fmt.yTitle || chartData.y_col || widget.y_axis || 'Y-Axis';
                                     const yVal = context.parsed.y !== undefined ? context.parsed.y : (raw && raw.y);
                                     lines.push(`${yAxisName}: ${yVal}`);
 
-                                    // 4. Received Power (if not already displayed as X or Y)
                                     if (raw.received_power !== undefined && raw.received_power !== null && !xAxisName.toLowerCase().includes('received') && !yAxisName.toLowerCase().includes('received')) {
                                         lines.push(`Received Power [W]: ${raw.received_power}`);
                                     }
-
-                                    // 5. Rectified Power (if not already displayed as X or Y)
                                     if (raw.rectified_power !== undefined && raw.rectified_power !== null && !xAxisName.toLowerCase().includes('rectified') && !yAxisName.toLowerCase().includes('rectified')) {
                                         lines.push(`Rectified Power [W]: ${raw.rectified_power}`);
                                     }
-
-                                    // 6. PFO (if not already displayed as X or Y)
                                     if (raw.pfo !== undefined && raw.pfo !== null && !xAxisName.toLowerCase().includes('pfo') && !yAxisName.toLowerCase().includes('pfo')) {
                                         lines.push(`PFO [mW]: ${raw.pfo}`);
                                     }
@@ -1222,12 +1718,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: widget.x_axis || 'Rectified Power [W]', color: '#94a3b8' },
-                            grid: { color: 'rgba(255, 255, 255, 0.06)' }
+                            title: { display: true, text: fmt.xTitle || widget.x_axis || 'Rectified Power [W]', color: '#94a3b8' },
+                            grid: { display: fmt.gridX !== false, color: 'rgba(255, 255, 255, 0.06)' }
                         },
                         y: {
-                            title: { display: true, text: widget.y_axis || 'PFO [mW]', color: '#94a3b8' },
-                            grid: { color: 'rgba(255, 255, 255, 0.06)' }
+                            title: { display: true, text: fmt.yTitle || widget.y_axis || 'PFO [mW]', color: '#94a3b8' },
+                            grid: { display: fmt.gridY !== false, color: 'rgba(255, 255, 255, 0.06)' }
                         }
                     }
                 }
@@ -1249,8 +1745,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chartType === 'area') { chartType = 'line'; }
         if (chartType === 'donut') { chartType = 'doughnut'; }
 
-        const themeColors = ['#38bdf8', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#64748b'];
-
         const chartObj = new Chart(canvasEl, {
             type: chartType,
             data: {
@@ -1258,8 +1752,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: widget.title,
                     data: chartData.datasets ? chartData.datasets[0].data : [],
-                    backgroundColor: (chartType === 'pie' || chartType === 'doughnut') ? themeColors : 'rgba(56, 189, 248, 0.7)',
-                    borderColor: (chartType === 'pie' || chartType === 'doughnut') ? '#1e293b' : '#38bdf8',
+                    backgroundColor: (chartType === 'pie' || chartType === 'doughnut') ? palette : 'rgba(242, 200, 17, 0.8)',
+                    borderColor: (chartType === 'pie' || chartType === 'doughnut') ? '#1e293b' : '#f2c811',
                     borderWidth: 1.5,
                     fill: (widget.visual_type === 'area')
                 }]
@@ -1270,9 +1764,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: (chartType === 'pie' || chartType === 'doughnut') }
+                    legend: { display: (chartType === 'pie' || chartType === 'doughnut') || fmt.showLegend !== false, position: fmt.legendPos || 'top' }
                 },
-
+                scales: {
+                    x: { grid: { display: fmt.gridX !== false } },
+                    y: { grid: { display: fmt.gridY !== false } }
+                },
                 onClick: (event, elementsArr) => {
                     if (elementsArr.length > 0) {
                         const index = elementsArr[0].index;
@@ -1348,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.selectedWidgetId = widget.id;
         state.activeVisualType = widget.visual_type || 'scatter';
 
-        elements.vizTitleInput.value = widget.title || '';
+        elements.vizTitleInput.value = (widget.format_config && widget.format_config.title) ? widget.format_config.title : (widget.title || '');
         elements.vizXSelect.value = widget.x_axis || '';
         elements.vizYSelect.value = widget.y_axis || '';
         if (elements.vizGroupSelect) elements.vizGroupSelect.value = widget.group_by || '';
@@ -1363,6 +1860,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.vizModeStatus) {
             elements.vizModeStatus.innerHTML = `<i class="fa-solid fa-pen-to-square text-accent"></i> Editing: "${widget.title || 'Visual'}"`;
         }
+
+        populateFormatVisualForm(widget);
 
         if (state.activeDashboard && state.activeDashboard.widgets) {
             renderCanvasWidgets(state.activeDashboard.widgets);
@@ -1421,6 +1920,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const isFullWidthType = ['scatter', 'table', 'line', 'area'].includes(state.activeVisualType);
+        const widgetFormatConfig = (existingWidget && existingWidget.format_config) ? Object.assign({}, existingWidget.format_config) : {};
+        widgetFormatConfig.page = widgetFormatConfig.page || state.currentPage;
+
         const payload = {
             title: elements.vizTitleInput.value.trim() || `${state.activeVisualType.toUpperCase()} Chart`,
             visual_type: state.activeVisualType,
@@ -1428,10 +1930,10 @@ document.addEventListener('DOMContentLoaded', () => {
             y_axis: yAxisVal,
             group_by: groupVal,
             aggregation: 'AVG',
+            format_config: widgetFormatConfig,
             width: isFullWidthType ? 12 : (existingWidget && existingWidget.width ? existingWidget.width : 6),
             height: isFullWidthType ? 7 : (existingWidget && existingWidget.height ? existingWidget.height : 5)
         };
-
 
         try {
             let res;
