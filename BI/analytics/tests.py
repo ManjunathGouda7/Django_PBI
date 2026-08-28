@@ -684,6 +684,35 @@ class EnterpriseArchitectureAndReadinessTests(TestCase):
         df_clean, report = DataValidationService.validate_and_clean_dataframe(df)
         self.assertEqual(report['boundary_violations_flagged'], 1)
 
+    def test_expression_engine_formula_evaluation(self):
+        from .services import ExpressionEngine
+        import pandas as pd
+        df = pd.DataFrame({'a': [10, 20], 'b': [2, 4]})
+        updated_df, msg = ExpressionEngine.evaluate_expression(df, "[a] / [b]", "ratio")
+        self.assertIn("ratio", updated_df.columns)
+        self.assertEqual(updated_df['ratio'].iloc[0], 5.0)
+
+    def test_sql_connector_service_sqlite(self):
+        from .services import SqlConnectorService
+        ok, msg = SqlConnectorService.test_connection('sqlite', {'database': ':memory:'})
+        self.assertTrue(ok)
+
+    def test_template_exporter(self):
+        from .services import TemplateExporter
+        ds = Dataset.objects.create(name="Template DS")
+        db = Dashboard.objects.create(title="Template Test DB", dataset=ds)
+        Widget.objects.create(dashboard=db, title="W1", visual_type="scatter")
+        tmpl = TemplateExporter.export_dashboard_template(db)
+        self.assertEqual(tmpl['dashboard_title'], "Template Test DB")
+        self.assertEqual(tmpl['visuals_count'], 1)
+
+    def test_report_digest_service(self):
+        from .services import ReportDigestService
+        ds = Dataset.objects.create(name="Digest DS")
+        db = Dashboard.objects.create(title="Digest Test DB", dataset=ds)
+        res = ReportDigestService.send_dashboard_digest(db, ['test@example.com'])
+        self.assertEqual(res['status'], 'success')
+
 
 
 

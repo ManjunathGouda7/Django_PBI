@@ -2,6 +2,10 @@ from .outlier_detection_service import OutlierDetectionService
 from .data_validation_service import DataValidationService
 from .data_import_service import DataImportService
 from .dashboard_service import DashboardService
+from .expression_engine import ExpressionEngine
+from .sql_connector_service import SqlConnectorService
+from .report_digest_service import ReportDigestService
+from .template_exporter import TemplateExporter
 from .legacy_engine import (
     DatasetEngine,
     DatasetValidator,
@@ -31,6 +35,10 @@ __all__ = [
     'DataValidationService',
     'DataImportService',
     'DashboardService',
+    'ExpressionEngine',
+    'SqlConnectorService',
+    'ReportDigestService',
+    'TemplateExporter',
     'DatasetEngine',
     'DatasetValidator',
     'SmartNarrativeEngine',

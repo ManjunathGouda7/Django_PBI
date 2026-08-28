@@ -48,10 +48,86 @@ class DatasetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['post'])
+    def add_calculated_column(self, request, pk=None):
+        dataset = self.get_object()
+        expr_str = request.data.get('expression', '')
+        new_col = request.data.get('column_name', '')
+        from .services import ExpressionEngine, DatasetEngine, clear_dataset_cache
+        try:
+            df = DatasetEngine.load_dataframe(dataset)
+            updated_df, msg = ExpressionEngine.evaluate_expression(df, expr_str, new_col)
+            # Save updated df back to dataset file
+            if dataset.file_path and os.path.exists(dataset.file_path):
+                updated_df.to_csv(dataset.file_path, index=False)
+            dataset.row_count = len(updated_df)
+            dataset.save()
+            clear_dataset_cache(dataset.id)
+            return Response({'status': 'success', 'message': msg, 'columns': list(updated_df.columns)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def import_sql(self, request):
+        db_type = request.data.get('db_type', 'sqlite')
+        conn_params = request.data.get('connection_params', {})
+        sql_query = request.data.get('sql_query', '')
+        dataset_name = request.data.get('name', 'SQL Imported Dataset')
+        from .services import SqlConnectorService, DatasetEngine
+        try:
+            df = SqlConnectorService.execute_query(db_type, conn_params, sql_query)
+            dataset = Dataset.objects.create(
+                name=dataset_name,
+                created_by=request.user if request.user.is_authenticated else None,
+                row_count=len(df),
+                file_type='sql'
+            )
+            # Save CSV file storage
+            storage_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'media', 'datasets')
+            os.makedirs(storage_dir, exist_ok=True)
+            fpath = os.path.join(storage_dir, f"sql_dataset_{dataset.id}.csv")
+            df.to_csv(fpath, index=False)
+            dataset.file_path = fpath
+            dataset.save()
+            return Response({'status': 'success', 'dataset_id': dataset.id, 'name': dataset.name, 'rows': len(df)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class DashboardViewSet(viewsets.ModelViewSet):
     queryset = Dashboard.objects.all().select_related('created_by', 'dataset', 'organization').prefetch_related('widgets').order_by('-created_at')
     serializer_class = DashboardSerializer
     permission_classes = [IsOwnerOrShared]
+
+    @action(detail=True, methods=['post'])
+    def send_digest(self, request, pk=None):
+        dashboard = self.get_object()
+        recipients = request.data.get('recipients', [])
+        if not recipients and request.user.is_authenticated and request.user.email:
+            recipients = [request.user.email]
+        from .services import ReportDigestService
+        try:
+            res = ReportDigestService.send_dashboard_digest(dashboard, recipients)
+            return Response(res)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'])
+    def export_template(self, request, pk=None):
+        dashboard = self.get_object()
+        from .services import TemplateExporter
+        template = TemplateExporter.export_dashboard_template(dashboard)
+        return Response(template)
+
+    @action(detail=True, methods=['post'])
+    def import_template(self, request, pk=None):
+        dashboard = self.get_object()
+        template_data = request.data.get('template', {})
+        from .services import TemplateExporter
+        try:
+            TemplateExporter.import_dashboard_template(template_data, dashboard)
+            return Response({'status': 'success', 'message': f"Template imported into '{dashboard.title}'."})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class WidgetViewSet(viewsets.ModelViewSet):
     queryset = Widget.objects.all().select_related('dashboard', 'created_by').order_by('-created_at')
