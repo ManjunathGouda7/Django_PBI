@@ -65,63 +65,28 @@
                 </a>
             </div>
 
-            <!-- Hidden Stubs to keep legacy element listeners valid -->
+            <!-- Hidden Stubs to keep JS listeners valid -->
             <button id="btn-get-data" style="display:none;"></button>
             <button id="btn-refresh-data" style="display:none;"></button>
             <button id="btn-export-pdf" style="display:none;"></button>
             <button id="btn-append-data" style="display:none;"></button>
+            <button id="ribbon-btn-getdata" style="display:none;"></button>
+            <button id="ribbon-btn-append" style="display:none;"></button>
+            <button id="btn-update-dataset" style="display:none;"></button>
+            <button id="btn-delete-dataset" style="display:none;"></button>
+            <button id="ribbon-btn-autodb" style="display:none;"></button>
+            <button id="ribbon-btn-refresh" style="display:none;"></button>
+            <button id="ribbon-btn-slicers" style="display:none;"></button>
+            <button id="ribbon-btn-excel" style="display:none;"></button>
+            <button id="ribbon-btn-csv" style="display:none;"></button>
+            <button id="ribbon-btn-pdf" style="display:none;"></button>
+            <button id="ribbon-btn-exec-pdf" style="display:none;"></button>
+            <button id="ribbon-btn-kiosk" style="display:none;"></button>
+            <select id="canvas-layout-select" style="display:none;"><option value="fluid">Fluid</option></select>
+            <select id="auto-refresh-select" style="display:none;"><option value="0">Off</option></select>
+            <input type="text" id="input-ai-qa" style="display:none;">
         </div>
     </header>
-
-    <!-- Power BI Desktop Ribbon Menu -->
-    <div class="pbi-ribbon-bar">
-        <div class="ribbon-tab active"><i class="fa-solid fa-house text-accent"></i> Home</div>
-        <div class="ribbon-tab" id="ribbon-btn-getdata"><i class="fa-solid fa-table text-primary"></i> Get Data</div>
-        {% if user_role == 'admin' or request.user.is_staff or request.user.is_superuser %}
-        <div class="ribbon-tab" id="ribbon-btn-append"><i class="fa-solid fa-file-circle-plus text-info"></i> Append Data</div>
-        {% endif %}
-        <div class="ribbon-tab" id="btn-update-dataset"><i class="fa-solid fa-file-pen text-warning"></i> Replace File</div>
-        <div class="ribbon-tab" id="btn-delete-dataset" style="color:#ef4444;"><i class="fa-solid fa-trash-can" style="color:#ef4444;"></i> Delete</div>
-        <div class="ribbon-tab" id="ribbon-btn-autodb"><i class="fa-solid fa-wand-magic-sparkles text-warning"></i> Auto-Dashboard</div>
-        <div class="ribbon-tab" id="ribbon-btn-refresh"><i class="fa-solid fa-rotate text-success"></i> Refresh</div>
-        <div class="ribbon-tab" id="ribbon-btn-slicers"><i class="fa-solid fa-filter text-info"></i> Slicers</div>
-        <div class="ribbon-tab" id="ribbon-btn-excel"><i class="fa-solid fa-file-excel text-success"></i> Excel</div>
-        <div class="ribbon-tab" id="ribbon-btn-csv"><i class="fa-solid fa-file-csv text-primary"></i> CSV</div>
-        <div class="ribbon-tab" id="ribbon-btn-pdf"><i class="fa-solid fa-file-pdf text-danger"></i> PDF</div>
-        <div class="ribbon-tab" id="ribbon-btn-exec-pdf"><i class="fa-solid fa-file-invoice text-danger"></i> Executive PDF</div>
-        <div class="ribbon-tab" id="ribbon-btn-kiosk"><i class="fa-solid fa-tv text-accent"></i> Kiosk</div>
-
-        <div class="ribbon-qa-box"
-            style="display:flex; align-items:center; gap:0.4rem; margin-left:auto; width:220px;">
-            <div style="position:relative; width:100%;">
-                <i class="fa-solid fa-wand-magic-sparkles text-accent"
-                    style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:0.75rem;"></i>
-                <input type="text" id="input-ai-qa" class="auth-input"
-                    placeholder="Ask AI Copilot..."
-                    style="padding:4px 8px 4px 28px; font-size:0.75rem; border-radius:14px; background:rgba(15,23,42,0.8); border:1px solid rgba(0,164,239,0.3); width:100%;">
-            </div>
-        </div>
-        <div class="ribbon-tab-layout"
-            style="display:flex; align-items:center; gap:0.3rem; font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
-            <i class="fa-solid fa-table-cells-large text-accent"></i> Canvas:
-            <select id="canvas-layout-select" class="pbi-select select-sm" style="padding:2px 6px; font-size:0.75rem;">
-                <option value="fluid">12-Col Fluid</option>
-                <option value="2x2">2×2 Grid</option>
-                <option value="16-9">16:9 Presentation</option>
-            </select>
-        </div>
-
-        <div class="ribbon-tab-auto-refresh"
-            style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
-            <i class="fa-solid fa-clock text-warning"></i> Auto-Refresh:
-            <select id="auto-refresh-select" class="pbi-select select-sm" style="padding:2px 6px; font-size:0.75rem;">
-                <option value="0">Off</option>
-                <option value="5">5s</option>
-                <option value="10">10s</option>
-                <option value="30">30s</option>
-            </select>
-        </div>
-    </div>
 
 
     <!-- Main Workspace (3-Pane Layout) -->
