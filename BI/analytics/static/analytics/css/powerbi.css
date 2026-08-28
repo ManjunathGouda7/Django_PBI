@@ -287,7 +287,7 @@ body.pbi-body {
 .pbi-workspace {
     display: flex;
     flex: 1;
-    height: calc(100vh - 90px);
+    height: calc(100vh - 48px);
     overflow: hidden;
 }
 
