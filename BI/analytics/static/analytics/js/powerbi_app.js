@@ -1810,10 +1810,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     onClick: (evt, activeElements) => {
                         if (activeElements && activeElements.length > 0) {
                             const datasetIndex = activeElements[0].datasetIndex;
-                            const clickedLabel = chartObj.data.datasets[datasetIndex].label;
-                            const groupColName = chartData.group_col || widget.group_by || 'Board';
-                            if (clickedLabel) {
-                                state.activeSlicers[groupColName] = [clickedLabel];
+                            const pointIndex = activeElements[0].index;
+                            const raw = chartObj.data.datasets[datasetIndex]?.data[pointIndex] || {};
+                            const boardVal = raw.board && raw.board !== 'N/A' ? raw.board : chartObj.data.datasets[datasetIndex].label;
+                            const targetCol = (raw.board && raw.board !== 'N/A') ? 'Board' : (chartData.group_col || widget.group_by || 'Board');
+                            if (boardVal) {
+                                state.activeSlicers[targetCol] = [boardVal];
                                 loadDashboard(state.activeDashboardId, true);
                                 renderSlicerPills();
                                 updateAllFilterCardSummaries();
